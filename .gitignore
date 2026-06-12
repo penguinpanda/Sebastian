@@ -1,0 +1,59 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.manifest
+*.spec
+
+# ===== Node.js / Frontend =====
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# ===== Docker =====
+.docker/
+
+# ===== Environment =====
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# ===== IDE / Editor =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== OS generated =====
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# ===== Logs & Temp =====
+*.log
+*.tmp
+celerybeat-schedule
+celerybeat.pid
+
+# ===== Database =====
+*.db
+*.sqlite3
+
+# ===== Test artifacts (frontend) =====
+frontend/test-results/
+frontend/playwright-report/
