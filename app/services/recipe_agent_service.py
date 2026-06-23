@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 
 from app.core.errors import LLMError, LLMUnavailableError, ValidationError
+from app.db.session import get_session_factory
 from app.llm.client import check_llm_available, get_llm_client
+from app.models.user_profile import UserProfile
 from app.schemas.agent_tools import (
     InventoryOnlyRecipeRequest,
     RecipeRecommendRequest,
@@ -13,6 +15,42 @@ from app.services.inventory_service import InventoryService
 
 
 logger = logging.getLogger(__name__)
+
+
+def _build_profile_context(user_id: str) -> str:
+    """从数据库读取用户档案，构建分类和偏好的上下文文本。"""
+    parts: list[str] = []
+    try:
+        db = get_session_factory()()
+        try:
+            profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+            if profile is None:
+                return ""
+
+            if profile.classification:
+                label = "单身男性" if profile.classification == "single_male" else "单身女性"
+                parts.append(f"用户分类：{label}")
+
+            prefs = profile.preferences
+            if isinstance(prefs, dict):
+                dietary = prefs.get("dietary", [])
+                if dietary:
+                    parts.append(f"长期饮食偏好：{', '.join(dietary)}")
+                lifestyle = prefs.get("lifestyle", [])
+                if lifestyle:
+                    parts.append(f"生活方式：{', '.join(lifestyle)}")
+                cuisine = prefs.get("cuisine", [])
+                if cuisine:
+                    parts.append(f"偏好菜系：{', '.join(cuisine)}")
+                free_text = prefs.get("free_text", "")
+                if free_text:
+                    parts.append(f"用户补充：{free_text}")
+        finally:
+            db.close()
+    except Exception:
+        logger.debug("Could not fetch UserProfile for %s", user_id, exc_info=True)
+
+    return "\n".join(parts)
 
 
 class RecipeAgentService:
@@ -25,6 +63,8 @@ class RecipeAgentService:
         return self._recommend_with_llm(payload)
 
     def _recommend_with_llm(self, payload: RecipeRecommendRequest) -> RecipeRecommendResponse:
+        profile_context = _build_profile_context(payload.user_id)
+
         messages = [
             {
                 "role": "system",
@@ -35,6 +75,9 @@ class RecipeAgentService:
                     ""
                     "ingredients 是数组，每个元素包含 name(食材名), amount(数量), unit(单位如 g/ml/个)。"
                     "例如: {\"name\": \"鸡胸肉\", \"amount\": 200, \"unit\": \"g\"}。"
+                    ""
+                    "请特别注意用户的分类（单身男性/女性）和长期饮食偏好，"
+                    "为单身人士推荐分量适中、制作快捷的菜谱。"
                     ""
                     "要求："
                     "1. required_equipment 必须列出制作该菜谱所需全部厨具；"
@@ -53,6 +96,7 @@ class RecipeAgentService:
                         目标热量：{payload.target_calories}
                         用户当前拥有厨具：{', '.join(payload.available_equipment) if payload.available_equipment else '无'}
                         饮食偏好：{', '.join(payload.dietary_preferences) if payload.dietary_preferences else '无'}
+                        {profile_context}
                         
                         请生成菜谱。
                         注意：
@@ -103,6 +147,8 @@ class RecipeAgentService:
         payload: InventoryOnlyRecipeRequest,
         inventory_text: str,
     ) -> RecipeRecommendResponse:
+        profile_context = _build_profile_context(payload.user_id)
+
         messages = [
             {
                 "role": "system",
@@ -122,6 +168,9 @@ class RecipeAgentService:
                     "如果完全无法组合出任何合理的菜谱，请在 title 中写明「无法生成」，"
                     "在 rationale 中说明原因，ingredients 留空。"
                     ""
+                    "请特别注意用户的分类（单身男性/女性）和长期饮食偏好，"
+                    "为单身人士推荐分量适中、制作快捷的菜谱。"
+                    ""
                     "要求："
                     "1. required_equipment 必须列出制作该菜谱所需全部厨具；"
                     "2. ingredients 中的食材名必须与库存清单中的食材名对应；"
@@ -138,6 +187,7 @@ class RecipeAgentService:
                         目标热量：{payload.target_calories}
                         用户当前拥有厨具：{', '.join(payload.available_equipment) if payload.available_equipment else '无'}
                         饮食偏好：{', '.join(payload.dietary_preferences) if payload.dietary_preferences else '无'}
+                        {profile_context}
 
                         【当前库存（仅可使用以下食材）】
                         {inventory_text}

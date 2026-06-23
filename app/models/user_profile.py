@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Float, Integer, String, Uuid
+from sqlalchemy import Float, Integer, JSON, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -23,3 +24,5 @@ class UserProfile(TimestampMixin, Base):
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     activity_level: Mapped[str | None] = mapped_column(String(20), nullable=True)  # low / medium / high
     health_goal: Mapped[str | None] = mapped_column(String(40), nullable=True)  # lose_weight / maintain / gain_muscle
+    classification: Mapped[str | None] = mapped_column(String(20), nullable=True)  # single_male / single_female
+    preferences: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)  # dietary / lifestyle / cuisine / free_text

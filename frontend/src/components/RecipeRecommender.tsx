@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { mcpAPI, mealAPI } from '../services/api';
 import { DEFAULT_RECIPE_FORM } from '../data/defaultTestData';
-import { RecipeRecommendResponse } from '../types';
+import { RecipeRecommendResponse, RecipeIngredient } from '../types';
 import ErrorState from './common/ErrorState';
 import { getFriendlyError } from '../services/error';
 
@@ -17,6 +17,27 @@ export default function RecipeRecommender({ userId }: Props) {
   const [confirming, setConfirming] = useState(false);
   const [confirmResult, setConfirmResult] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+
+  // 食材可编辑副本
+  const [editedIngredients, setEditedIngredients] = useState<RecipeIngredient[] | null>(null);
+  const effectiveIngredients = editedIngredients ?? result?.ingredients ?? [];
+
+  const adjustIngredient = (index: number, delta: number) => {
+    const base = effectiveIngredients;
+    if (index < 0 || index >= base.length) return;
+    const next = [...base];
+    const newAmount = Math.max(1, (next[index].amount || 0) + delta);
+    next[index] = { ...next[index], amount: newAmount };
+    setEditedIngredients(next);
+  };
+
+  const setIngredientAmount = (index: number, amount: number) => {
+    const base = effectiveIngredients;
+    if (index < 0 || index >= base.length) return;
+    const next = [...base];
+    next[index] = { ...next[index], amount: Math.max(1, amount || 1) };
+    setEditedIngredients(next);
+  };
 
   const equipment = ['pan', 'pot', 'oven', 'microwave', 'rice_cooker', 'blender'];
   const preferences = ['high-protein', 'low-fat', 'vegetarian', 'low-carb'];
@@ -45,6 +66,7 @@ export default function RecipeRecommender({ userId }: Props) {
         },
       });
       setResult(res.data.result);
+      setEditedIngredients(null);
     } catch (err: unknown) {
       setError(getFriendlyError(err, '菜谱推荐失败'));
     } finally {
@@ -57,7 +79,11 @@ export default function RecipeRecommender({ userId }: Props) {
     setConfirming(true);
     setConfirmResult('');
     try {
-      const res = await mealAPI.confirm(result, userId);
+      // 使用编辑后的食材
+      const payload = editedIngredients
+        ? { ...result, ingredients: editedIngredients }
+        : result;
+      const res = await mealAPI.confirm(payload, userId);
       const data = res.data as any;
       const deductedNames = (data.deducted || []).map((d: any) => `${d.name} ${d.amount}${d.unit}`).join('、');
       const missingNames = (data.missing || []).map((m: any) => `${m.name} ${m.amount}${m.unit}`).join('、');
@@ -184,8 +210,8 @@ export default function RecipeRecommender({ userId }: Props) {
 
             {result.steps.length > 0 && (
               <div>
-                <h3 className="font-semibold text-lg mb-2">👨‍🍳 烹饪步骤</h3>
-                <ol className="list-decimal list-inside space-y-2 text-gray-700">
+                <h3 className="font-bold text-lg mb-2">👨‍🍳 烹饪步骤</h3>
+                <ol className="list-decimal list-inside space-y-2 font-semibold text-gray-800">
                   {result.steps.map((step, i) => (
                     <li key={i}>{step}</li>
                   ))}
@@ -195,12 +221,74 @@ export default function RecipeRecommender({ userId }: Props) {
 
             {result.ingredients && result.ingredients.length > 0 && (
               <div>
-                <h3 className="font-semibold text-lg mb-2">🛒 所需食材</h3>
-                <ul className="list-disc list-inside space-y-1 text-gray-700">
-                  {result.ingredients.map((ing, i) => (
-                    <li key={i}>{ing.name} — {ing.amount} {ing.unit}</li>
+                <h3 className="font-semibold text-lg mb-3">🛒 所需食材</h3>
+
+                {/* 食材行：中名称 | 右控件+数量+单位 */}
+                <div className="space-y-2">
+                  {effectiveIngredients.map((ing, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 p-2 bg-white rounded-lg border border-gray-200"
+                    >
+                      {/* 中间：食材名称，居中 */}
+                      <span className="flex-1 text-center font-medium text-gray-800">
+                        {ing.name}
+                      </span>
+                      {/* 右侧：加减控件 + 可编辑数量 + 单位 */}
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => adjustIngredient(i, -5)}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+                          title="减少 5"
+                        >−5</button>
+                        <button
+                          type="button"
+                          onClick={() => adjustIngredient(i, -1)}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+                          title="减少 1"
+                        >−</button>
+                        <input
+                          type="number"
+                          value={ing.amount}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (Number.isFinite(v)) setIngredientAmount(i, v);
+                          }}
+                          className="w-16 text-center text-lg font-bold border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                          min={1}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => adjustIngredient(i, 1)}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+                          title="增加 1"
+                        >+</button>
+                        <button
+                          type="button"
+                          onClick={() => adjustIngredient(i, 5)}
+                          className="w-6 h-6 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+                          title="增加 5"
+                        >+5</button>
+                      </div>
+                      {/* 单位 */}
+                      <span className="text-sm text-gray-500 font-medium w-6 text-center shrink-0">{ing.unit}</span>
+                    </div>
                   ))}
-                </ul>
+                </div>
+
+                {/* 确认按钮 — 右下，放大 */}
+                {!confirmed && (
+                  <div className="flex justify-end mt-3">
+                    <button
+                      onClick={handleConfirmMeal}
+                      disabled={confirming}
+                      className="px-6 py-2 rounded-lg text-base font-bold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
+                    >
+                      {confirming ? '处理中...' : '✅ 确认制作'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -215,23 +303,14 @@ export default function RecipeRecommender({ userId }: Props) {
               </div>
             )}
 
-            {/* 确认制作按钮 */}
-            <div className="pt-3 border-t">
-              {!confirmed ? (
-                <button
-                  onClick={handleConfirmMeal}
-                  disabled={confirming}
-                  className="btn bg-green-600 hover:bg-green-700 text-white w-full"
-                >
-                  {confirming ? '处理中...' : '✅ 确认制作'}
-                </button>
-              ) : null}
-              {confirmResult && (
-                <p className={`mt-2 text-sm ${confirmResult.startsWith('✅') ? 'text-green-700' : 'text-red-600'}`}>
+            {/* 确认结果消息 */}
+            {confirmResult && (
+              <div className="pt-3 border-t">
+                <p className={`text-sm ${confirmResult.startsWith('✅') ? 'text-green-700' : 'text-red-600'}`}>
                   {confirmResult}
                 </p>
-              )}
-            </div>
+              </div>
+            )}
 
             {result._audit?.trace_id && (
               <div className="pt-3 border-t">

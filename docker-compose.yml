@@ -1,6 +1,11 @@
 services:
   migrate:
-    build: .
+    build:
+      context: .
+      network: host
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:
@@ -11,7 +16,12 @@ services:
     command: alembic upgrade head
 
   api:
-    build: .
+    build:
+      context: .
+      network: host
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:
@@ -31,7 +41,12 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   celery-worker:
-    build: .
+    build:
+      context: .
+      network: host
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:
@@ -52,7 +67,12 @@ services:
     command: celery -A app.workers.celery_app:celery_app worker --loglevel=INFO
 
   celery-beat:
-    build: .
+    build:
+      context: .
+      network: host
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:

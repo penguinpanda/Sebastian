@@ -123,3 +123,26 @@ export interface MCPSearchAnswerInput {
   user_id: string;
   query: string;
 }
+
+// ========== 注册表单 ==========
+
+export interface RegisterPreferencesData {
+  dietary: string[];
+  lifestyle: string[];
+  cuisine: string[];
+  free_text: string;
+}
+
+export interface RegisterFormData {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  classification: 'single_male' | 'single_female' | '';
+  preferences: RegisterPreferencesData;
+  age: number | null;
+  gender: string;
+  height_cm: number | null;
+  weight_kg: number | null;
+  activity_level: string;
+  health_goal: string;
+}

@@ -75,14 +75,32 @@ class HealthAgentService:
             activity = user_profile.get("activity_level", "")
             if activity:
                 context_parts.append(f"活动水平: {activity}")
+            # 注入用户分类与偏好
+            classification = user_profile.get("classification", "")
+            if classification:
+                label = "单身男性" if classification == "single_male" else "单身女性"
+                context_parts.append(f"用户分类: {label}")
+            preferences = user_profile.get("preferences")
+            if isinstance(preferences, dict):
+                dietary = preferences.get("dietary", [])
+                if dietary:
+                    context_parts.append(f"饮食偏好: {', '.join(dietary)}")
+                lifestyle = preferences.get("lifestyle", [])
+                if lifestyle:
+                    context_parts.append(f"生活方式: {', '.join(lifestyle)}")
+                free_text = preferences.get("free_text", "")
+                if free_text:
+                    context_parts.append(f"用户补充: {free_text}")
 
         messages = [
             {
                 "role": "system",
                 "content": (
-                    "你是一名专业的健康与营养顾问。根据用户的 BMI 数据、饮食记录和健康目标，"
+                    "你是一名专业的健康与营养顾问。根据用户的 BMI 数据、饮食记录、健康目标、"
+                    "用户分类（单身男性/女性）和饮食偏好，"
                     "给出个性化、可操作的健康建议。用中文回复，简洁专业（200字以内），"
                     "避免使用模板化语言，针对具体数据给出具体建议。"
+                    "考虑单身人士可能需要简单快捷的食谱和健康方案。"
                 ),
             },
             {

@@ -284,6 +284,17 @@ export default function ConversationPage({ userId }: Props) {
     }));
   };
 
+  const setIngredientAmount = (messageId: string, recipe: RecipeRecommendResponse, index: number, amount: number) => {
+    const current = getEffectiveRecipe(messageId, recipe);
+    const ings = [...current.ingredients];
+    if (index < 0 || index >= ings.length) return;
+    ings[index] = { ...ings[index], amount: Math.max(1, amount || 1) };
+    setRecipeEdits(prev => ({
+      ...prev,
+      [messageId]: { ...current, ingredients: ings },
+    }));
+  };
+
   const handleConfirmMeal = async (messageId: string, originalRecipe: RecipeRecommendResponse) => {
     const msg = messages.find(m => m.id === messageId);
     if (!msg || msg.mealId || msg.rolledBack) return;
@@ -548,8 +559,8 @@ export default function ConversationPage({ userId }: Props) {
                     }`}>
                       {message.recipe.steps.length > 0 && (
                         <div>
-                          <h4 className="font-semibold mb-1">👨‍🍳 烹饪步骤</h4>
-                          <ol className="list-decimal list-inside space-y-1">
+                          <h4 className="font-bold mb-1">👨‍🍳 烹饪步骤</h4>
+                          <ol className="list-decimal list-inside space-y-1 font-semibold">
                             {message.recipe.steps.map((step, index) => (
                               <li key={index}>{step}</li>
                             ))}
@@ -558,39 +569,85 @@ export default function ConversationPage({ userId }: Props) {
                       )}
                       {message.recipe.ingredients && message.recipe.ingredients.length > 0 && (
                         <div>
-                          <h4 className="font-semibold mb-1">🛒 所需食材</h4>
-                          <ul className="space-y-1">
+                          <h4 className="font-semibold mb-2">🛒 所需食材</h4>
+
+                          {/* 食材行：中名称 | 右控件+数量+单位 */}
+                          <div className="space-y-1.5">
                             {(() => {
                               const eff = getEffectiveRecipe(message.id, message.recipe);
                               return eff.ingredients.map((ing, i) => (
-                                <li key={i} className="flex items-center gap-2">
-                                  <span className="flex-1">{ing.name} — {ing.amount} {ing.unit}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => adjustIngredient(message.id, message.recipe!, i, -5)}
-                                    className="w-6 h-6 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
-                                    title="减少"
-                                  >−</button>
-                                  <button
-                                    type="button"
-                                    onClick={() => adjustIngredient(message.id, message.recipe!, i, -1)}
-                                    className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs"
-                                  >-</button>
-                                  <button
-                                    type="button"
-                                    onClick={() => adjustIngredient(message.id, message.recipe!, i, 1)}
-                                    className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs"
-                                  >+</button>
-                                  <button
-                                    type="button"
-                                    onClick={() => adjustIngredient(message.id, message.recipe!, i, 5)}
-                                    className="w-6 h-6 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
-                                    title="增加"
-                                  >+</button>
-                                </li>
+                                <div
+                                  key={i}
+                                  className="flex items-center gap-2 p-1.5 rounded border border-gray-200 bg-white/80"
+                                >
+                                  {/* 中间：食材名称，居中 */}
+                                  <span className="flex-1 text-center text-xs font-medium text-gray-800">
+                                    {ing.name}
+                                  </span>
+                                  {/* 右侧：加减控件 + 可编辑数量 + 单位 */}
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustIngredient(message.id, message.recipe!, i, -5)}
+                                      className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+                                      title="减少 5"
+                                    >−5</button>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustIngredient(message.id, message.recipe!, i, -1)}
+                                      className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+                                      title="减少 1"
+                                    >−</button>
+                                    <input
+                                      type="number"
+                                      value={ing.amount}
+                                      onChange={(e) => {
+                                        const v = parseInt(e.target.value, 10);
+                                        if (Number.isFinite(v)) setIngredientAmount(message.id, message.recipe!, i, v);
+                                      }}
+                                      className="w-14 text-center text-sm font-bold border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                      min={1}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustIngredient(message.id, message.recipe!, i, 1)}
+                                      className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+                                      title="增加 1"
+                                    >+</button>
+                                    <button
+                                      type="button"
+                                      onClick={() => adjustIngredient(message.id, message.recipe!, i, 5)}
+                                      className="w-5 h-5 flex items-center justify-center rounded bg-gray-200 hover:bg-gray-300 text-xs font-bold"
+                                      title="增加 5"
+                                    >+5</button>
+                                  </div>
+                                  {/* 单位 */}
+                                  <span className="text-xs text-gray-500 font-medium w-5 text-center shrink-0">{ing.unit}</span>
+                                </div>
                               ));
                             })()}
-                          </ul>
+                          </div>
+
+                          {/* 确认/回退按钮 — 右下，放大 */}
+                          <div className="flex justify-end mt-2 gap-2">
+                            {!message.mealId && !message.rolledBack ? (
+                              <button
+                                onClick={() => handleConfirmMeal(message.id, message.recipe!)}
+                                disabled={cs?.confirming}
+                                className="px-5 py-1.5 rounded-lg text-sm font-bold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors shadow-sm"
+                              >
+                                {cs?.confirming ? '处理中...' : '✅ 确认制作'}
+                              </button>
+                            ) : !message.rolledBack && message.mealId ? (
+                              <button
+                                onClick={() => handleRollbackMeal(message.id)}
+                                disabled={rollbackStates[message.id]}
+                                className="px-5 py-1.5 rounded-lg text-sm font-bold bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors shadow-sm"
+                              >
+                                {rollbackStates[message.id] ? '回退中...' : '↩️ 回退'}
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       )}
                       {message.recipe.missing_ingredients.length > 0 && (
@@ -598,27 +655,10 @@ export default function ConversationPage({ userId }: Props) {
                           ❌ 缺少食材：{message.recipe.missing_ingredients.join('、')}
                         </p>
                       )}
-                      {/* 确认制作 + 回退 */}
-                      <div className="pt-2">
-                        {!message.mealId && !message.rolledBack ? (
-                          <button
-                            onClick={() => handleConfirmMeal(message.id, message.recipe!)}
-                            disabled={cs?.confirming}
-                            className="px-3 py-1.5 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-                          >
-                            {cs?.confirming ? '处理中...' : '✅ 确认制作'}
-                          </button>
-                        ) : !message.rolledBack && message.mealId ? (
-                          <button
-                            onClick={() => handleRollbackMeal(message.id)}
-                            disabled={rollbackStates[message.id]}
-                            className="px-3 py-1.5 rounded text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
-                          >
-                            {rollbackStates[message.id] ? '回退中...' : '↩️ 回退'}
-                          </button>
-                        ) : null}
+                      {/* 确认结果消息 */}
+                      <div>
                         {(cs?.result || message.confirmResult) && (
-                          <p className={`mt-1 text-xs ${
+                          <p className={`text-xs ${
                             (cs?.result || message.confirmResult || '').includes('✅') ? 'text-green-700'
                             : (cs?.result || message.confirmResult || '').includes('↩️') ? 'text-blue-700'
                             : 'text-red-600'

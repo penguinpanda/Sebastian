@@ -26,3 +26,24 @@ export const DEFAULT_RECIPE_FORM = {
   available_equipment: ['pan', 'pot', 'rice_cooker'],
   dietary_preferences: ['high-protein'],
 };
+
+// ========== 注册表单默认值 ==========
+
+export const DEFAULT_REGISTER_FORM = {
+  email: 'test@example.com',
+  password: 'test123456',
+  confirmPassword: 'test123456',
+  classification: '' as const,
+  preferences: {
+    dietary: [] as string[],
+    lifestyle: [] as string[],
+    cuisine: [] as string[],
+    free_text: '',
+  },
+  age: 25,
+  gender: 'male',
+  height_cm: 175,
+  weight_kg: 70,
+  activity_level: 'medium',
+  health_goal: 'maintain',
+};

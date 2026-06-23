@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import InventoryManager from './components/InventoryManager';
 import ConversationPage from './components/ConversationPage';
-import HealthAnalyzer from './components/HealthAnalyzer';
 import EquipmentChecker from './components/EquipmentChecker';
 import MemorySearch from './components/MemorySearch';
 import ProfileForm from './components/ProfileForm';
+import RegisterPage from './components/RegisterPage';
 import { DEFAULT_TEST_USER_ID } from './data/defaultTestData';
 
-type Tab = 'chat' | 'inventory' | 'health' | 'equipment' | 'memory' | 'profile';
+type Tab = 'chat' | 'inventory' | 'equipment' | 'memory' | 'profile';
 
 const STORAGE_KEY = 'sebastian_user_id';
+const REGISTERED_KEY = 'sebastian_registered';
 
 // 预置用户 ID，含种子测试用 ID
 const PRESET_USER_IDS = [
@@ -33,12 +34,41 @@ function saveUserId(id: string) {
   try { localStorage.setItem(STORAGE_KEY, id); } catch { /* ignore */ }
 }
 
+function loadRegisteredUser(): { userId: string } | null {
+  try {
+    const raw = localStorage.getItem(REGISTERED_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.userId && typeof parsed.userId === 'string') return parsed;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveRegisteredUser(userId: string) {
+  try {
+    localStorage.setItem(REGISTERED_KEY, JSON.stringify({ userId, timestamp: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+function clearRegisteredUser() {
+  try { localStorage.removeItem(REGISTERED_KEY); } catch { /* ignore */ }
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('chat');
-  const [userId, setUserId] = useState(loadSavedUserId);
+  const [userId, setUserId] = useState(() => {
+    // 已注册用户优先使用注册时的 userId
+    const reg = loadRegisteredUser();
+    return reg?.userId || loadSavedUserId();
+  });
   const [editingUserId, setEditingUserId] = useState(false);
   const [draftUserId, setDraftUserId] = useState(userId);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 注册状态
+  const registered = loadRegisteredUser();
+  const [isRegistered, setIsRegistered] = useState(!!registered);
 
   // userId 变更时持久化
   useEffect(() => {
@@ -73,11 +103,30 @@ export default function App() {
   const tabs: Array<{ id: Tab; label: string; icon: string }> = [
     { id: 'chat', label: '对话', icon: '💬' },
     { id: 'inventory', label: '库存管理', icon: '📦' },
-    { id: 'health', label: '健康分析', icon: '💪' },
     { id: 'equipment', label: '厨具检查', icon: '🔪' },
     { id: 'memory', label: '模型记忆', icon: '🧠' },
     { id: 'profile', label: '健康档案', icon: '🩺' },
   ];
+
+  // 注册完成回调
+  const handleRegisterComplete = (newUserId: string) => {
+    saveRegisteredUser(newUserId);
+    saveUserId(newUserId);
+    setUserId(newUserId);
+    setIsRegistered(true);
+  };
+
+  // 退出登录
+  const handleLogout = () => {
+    clearRegisteredUser();
+    setIsRegistered(false);
+    setUserId(DEFAULT_TEST_USER_ID);
+  };
+
+  // 未注册 → 显示注册页
+  if (!isRegistered) {
+    return <RegisterPage onRegisterComplete={handleRegisterComplete} />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -133,6 +182,15 @@ export default function App() {
                 <option value={userId}>{userId}</option>
               )}
             </select>
+
+            {/* 退出登录 */}
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded border border-gray-200 hover:border-red-300 transition-colors whitespace-nowrap"
+              title="退出登录，回到注册页"
+            >
+              🚪 退出
+            </button>
           </div>
         </div>
       </header>
@@ -162,7 +220,6 @@ export default function App() {
       <main className="max-w-6xl mx-auto px-4 py-8">
         {activeTab === 'chat' && <ConversationPage userId={userId} />}
         {activeTab === 'inventory' && <InventoryManager userId={userId} />}
-        {activeTab === 'health' && <HealthAnalyzer userId={userId} />}
         {activeTab === 'equipment' && <EquipmentChecker userId={userId} />}
         {activeTab === 'memory' && <MemorySearch userId={userId} />}
         {activeTab === 'profile' && <ProfileForm userId={userId} />}

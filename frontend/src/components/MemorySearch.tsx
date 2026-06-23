@@ -72,6 +72,7 @@ export default function MemorySearch({ userId }: Props) {
   const memoryTypeLabel: Record<string, string> = {
     profile: '个人资料',
     preference: '偏好',
+    profile_preference: '健康档案与偏好',
     allergy: '过敏/禁忌',
     history: '历史信息',
     other: '其他',
