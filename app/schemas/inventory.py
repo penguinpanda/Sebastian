@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 # ============================================================
 
 class InventoryCreate(BaseModel):
+    user_id: str = Field(default="default", min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=120)
     quantity: float = Field(gt=0)
     unit: str = Field(min_length=1, max_length=20)
@@ -55,6 +56,7 @@ class InventoryAdjust(BaseModel):
 # ============================================================
 class InventoryRead(BaseModel):
     id: UUID
+    user_id: str
     name: str
     quantity: float
     unit: str

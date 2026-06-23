@@ -42,14 +42,18 @@ apiClient.interceptors.response.use(
 
 // 库存 API：对应后端 /api/inventory 路由。
 export const inventoryAPI = {
-  list: () => apiClient.get('/inventory'),
-  create: (data: any) => apiClient.post('/inventory', data, { headers: { 'Content-Type': 'application/json' } }),
+  list: (user_id?: string) =>
+    apiClient.get('/inventory', { params: user_id ? { user_id } : {} }),
+  create: (data: any) =>
+    apiClient.post('/inventory', data, { headers: { 'Content-Type': 'application/json' } }),
   get: (id: string) => apiClient.get(`/inventory/${id}`),
   remove: (id: string) => apiClient.delete(`/inventory/${id}`),
   adjust: (id: string, delta: number, note?: string) =>
     apiClient.patch(`/inventory/${id}/adjust`, { delta, note }),
-  summary: (days: number = 7) => apiClient.get('/inventory/summary', { params: { days } }),
-  expiring: (days: number = 7) => apiClient.get('/inventory/alerts/expiring', { params: { days } }),
+  summary: (days: number = 7, user_id?: string) =>
+    apiClient.get('/inventory/summary', { params: { days, ...(user_id ? { user_id } : {}) } }),
+  expiring: (days: number = 7, user_id?: string) =>
+    apiClient.get('/inventory/alerts/expiring', { params: { days, ...(user_id ? { user_id } : {}) } }),
 };
 
 // Agent API：聊天接口会返回 task_id，任务状态接口优先读后端缓存。
@@ -63,6 +67,8 @@ export const agentAPI = {
 // Agent Tool API：面向菜谱、健康、厨具、搜索四类专用 Agent。
 export const agentToolsAPI = {
   recipeRecommend: (data: any) => apiClient.post('/agents/recipe/recommend', data),
+  recipeRecommendFromInventory: (data: any) =>
+    apiClient.post('/agents/recipe/recommend-from-inventory', data),
   healthAnalyze: (data: any) => apiClient.post('/agents/health/analyze', data),
   equipmentCheck: (data: any) => apiClient.post('/agents/equipment/check', data),
   searchAnswer: (data: any) => apiClient.post('/agents/search/answer', data),
@@ -83,6 +89,40 @@ export const memoryAPI = {
 export const healthAPI = {
   check: () => apiClient.get('/health'),
   dependencies: () => apiClient.get('/health/dependencies'),
+};
+
+// Meal API：确认制作菜谱 + 查询饮食历史 + 回退
+export const mealAPI = {
+  confirm: (recipe: any, user_id: string) =>
+    apiClient.post('/meals/confirm', { user_id, recipe }),
+  rollback: (meal_id: string) =>
+    apiClient.post(`/meals/${meal_id}/rollback`),
+  history: (user_id: string, days: number = 7) =>
+    apiClient.get('/meals/history', { params: { user_id, days } }),
+};
+
+// Conversation API：持久化对话历史
+export const conversationAPI = {
+  save: (user_id: string, date: string, messages: any[]) =>
+    apiClient.post('/conversations/save', { user_id, date, messages }),
+  load: (user_id: string, date: string) =>
+    apiClient.get('/conversations', { params: { user_id, date } }),
+  dates: (user_id: string) =>
+    apiClient.get('/conversations/dates', { params: { user_id } }),
+};
+
+// Profile API：用户健康档案
+export const profileAPI = {
+  save: (data: any) => apiClient.post('/profile', data),
+  get: (user_id: string) => apiClient.get('/profile', { params: { user_id } }),
+};
+
+// Recipe 菜谱库 API
+export const recipeAPI = {
+  list: (user_id: string, query?: string, sort?: string, limit?: number) =>
+    apiClient.get('/recipes', { params: { user_id, query, sort, limit } }),
+  top: (user_id: string, limit?: number) =>
+    apiClient.get('/recipes/top', { params: { user_id, limit } }),
 };
 
 // MCP API (P2.5)：前端以统一 invoke 协议调用后端工具。
@@ -148,6 +188,22 @@ export const mcpAPI = {
   }) =>
     invokeMCPTool<MCPSearchAnswerInput, SearchAnswerResponse>({
       name: 'search.answer',
+      input: params.input,
+      user_id: params.user_id,
+      action: params.action ?? 'invoke',
+      idempotency_key: params.idempotency_key,
+      trace_id: params.trace_id,
+    }),
+
+  recipeRecommendFromInventory: (params: {
+    input: MCPRecipeRecommendInput;
+    user_id: string;
+    action?: string;
+    idempotency_key?: string;
+    trace_id?: string;
+  }) =>
+    invokeMCPTool<MCPRecipeRecommendInput, RecipeRecommendResponse>({
+      name: 'recipe.recommend-from-inventory',
       input: params.input,
       user_id: params.user_id,
       action: params.action ?? 'invoke',

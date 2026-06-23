@@ -3,10 +3,12 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.errors import LLMUnavailableError, ValidationError
 from app.core.logging_utils import configure_logging, log_access_event
 from app.core.request_context import set_current_trace_id
 
@@ -68,6 +70,24 @@ async def trace_id_middleware(request: Request, call_next):
         latency_ms=latency_ms,
     )
     return response
+
+
+@app.exception_handler(LLMUnavailableError)
+async def llm_unavailable_handler(request: Request, exc: LLMUnavailableError) -> JSONResponse:
+    """全局异常处理器：LLM 不可用时统一返回 503 + 结构化错误。"""
+    return JSONResponse(
+        status_code=503,
+        content={"success": False, "error": str(exc)},
+    )
+
+
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+    """全局异常处理器：业务校验失败统一返回 400 + 结构化错误。"""
+    return JSONResponse(
+        status_code=400,
+        content={"success": False, "error": str(exc)},
+    )
 
 
 app.include_router(api_router)

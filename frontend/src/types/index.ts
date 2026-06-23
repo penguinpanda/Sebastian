@@ -18,10 +18,17 @@ export interface ExpiringInventory {
   days_left: number;
 }
 
+export interface RecipeIngredient {
+  name: string;
+  amount: number;
+  unit: string;
+}
+
 export interface RecipeRecommendResponse {
   title: string;
   rationale: string;
   estimated_calories: number;
+  ingredients: RecipeIngredient[];
   steps: string[];
   missing_ingredients: string[];
   _audit?: MCPAudit;

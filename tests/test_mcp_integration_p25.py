@@ -17,7 +17,22 @@ from app.services.recipe_agent_service import RecipeAgentService
 from app.services.search_agent_service import SearchAgentService
 
 
+class DummyResult:
+    """Simulate a SQLAlchemy Result that returns no rows."""
+    def scalars(self):
+        return self
+
+    def first(self):
+        return None
+
+    def all(self):
+        return []
+
+
 class DummySession:
+    def execute(self, stmt):
+        return DummyResult()
+
     def close(self) -> None:
         return None
 

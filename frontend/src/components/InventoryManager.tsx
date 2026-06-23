@@ -34,7 +34,7 @@ export default function InventoryManager({ userId }: Props) {
     setError('');
     try {
       // 库存列表是首屏主内容，先显示它；临期提醒慢或失败时不阻塞列表渲染。
-      const listRes = await inventoryAPI.list();
+      const listRes = await inventoryAPI.list(userId);
       setInventories(listRes.data);
     } catch (err: unknown) {
       setError(getFriendlyError(err, '库存加载失败'));
@@ -43,7 +43,7 @@ export default function InventoryManager({ userId }: Props) {
     }
 
     try {
-      const expiringRes = await inventoryAPI.expiring(7);
+      const expiringRes = await inventoryAPI.expiring(7, userId);
       setExpiring(expiringRes.data);
     } catch {
       setExpiring([]);
@@ -64,7 +64,7 @@ export default function InventoryManager({ userId }: Props) {
 
     setIsSubmitting(true);
     try {
-      await inventoryAPI.create(newItem);
+      await inventoryAPI.create({ ...newItem, user_id: userId });
       // 创建成功后重置表单并刷新列表，确保临期提醒也同步更新。
       setNewItem(DEFAULT_INVENTORY_ITEM);
       setError('');

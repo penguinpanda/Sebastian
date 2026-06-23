@@ -60,6 +60,35 @@ class RecipeRecommendRequest(BaseModel):
     dietary_preferences: list[str] = Field(default_factory=list)
 
 
+# ============================================================
+# 仅使用库存材料生成菜谱请求模型
+#
+# 用途：
+# 与 RecipeRecommendRequest 字段一致，但语义上强制
+# LLM 仅使用当前库存食材生成菜谱，不得推荐任何库存之外的食材。
+#
+# ============================================================
+
+
+class InventoryOnlyRecipeRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=64)
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack"] = "dinner"
+    target_calories: int = Field(default=600, ge=200, le=2000)
+    available_equipment: list[str] = Field(default_factory=list)
+    dietary_preferences: list[str] = Field(default_factory=list)
+
+
+
+# ============================================================
+# 菜谱配料模型
+#
+# 用于"确认制作 → 扣库存"链路，LLM 生成菜谱时同步产出。
+# ============================================================
+class RecipeIngredient(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    amount: float = Field(gt=0)
+    unit: str = Field(min_length=1, max_length=20)
+
 
 # ============================================================
 # 菜谱推荐响应模型
@@ -80,8 +109,9 @@ class RecipeRecommendResponse(BaseModel):
     title: str
     rationale: str
     estimated_calories: int
+    ingredients: list[RecipeIngredient] = Field(default_factory=list)
     steps: list[str] = Field(default_factory=list)
-    
+
     required_equipment: list[str] = Field(default_factory=list)
     feasible: bool = True
 

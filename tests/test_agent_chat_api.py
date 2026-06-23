@@ -48,7 +48,7 @@ async def test_agent_chat_persists_task_and_log(monkeypatch: pytest.MonkeyPatch,
 
     app.dependency_overrides[get_db_session] = override_db
 
-    monkeypatch.setattr("app.api.routes.agent.run_inventory_agent", lambda message, user_id=None: "Inventory looks good.")
+    monkeypatch.setattr("app.api.routes.agent.run_router_agent", lambda message, user_id=None: "Inventory looks good.")
     monkeypatch.setattr("app.api.routes.agent.check_agent_rate_limit", lambda user_id: True)
     monkeypatch.setattr("app.api.routes.agent.enqueue_agent_task", lambda task_id, user_id, message: True)
     monkeypatch.setattr(
@@ -97,7 +97,7 @@ async def test_agent_chat_error_path_persists_failure(monkeypatch: pytest.Monkey
     def _raise(*args, **kwargs):
         raise RuntimeError("llm down")
 
-    monkeypatch.setattr("app.api.routes.agent.run_inventory_agent", _raise)
+    monkeypatch.setattr("app.api.routes.agent.run_router_agent", _raise)
     monkeypatch.setattr("app.api.routes.agent.check_agent_rate_limit", lambda user_id: True)
     monkeypatch.setattr("app.api.routes.agent.enqueue_agent_task", lambda task_id, user_id, message: True)
     monkeypatch.setattr(
@@ -111,7 +111,7 @@ async def test_agent_chat_error_path_persists_failure(monkeypatch: pytest.Monkey
 
     assert response.status_code == 200
     body = response.json()
-    assert body["reply"] == "Something went wrong. Please try again."
+    assert "无法使用LLM服务" in body["reply"]
     task_id = UUID(body["task_id"])
     assert status_calls[0] == (body["task_id"], "running")
     assert status_calls[1] == (body["task_id"], "failed")

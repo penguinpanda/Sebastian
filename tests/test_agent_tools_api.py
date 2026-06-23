@@ -42,7 +42,7 @@ async def test_recipe_agent_endpoint() -> None:
 @pytest.mark.asyncio
 async def test_health_agent_endpoint() -> None:
     class StubHealthAgent:
-        def analyze(self, payload):
+        def analyze(self, payload, meal_history=None, days=7):
             return {
                 "bmi": 22.1,
                 "bmi_category": "normal",

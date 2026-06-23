@@ -19,6 +19,7 @@ class InventoryRecord:
     """仓储层对外返回的轻量库存记录，隔离 ORM 模型和上层服务。"""
 
     id: UUID
+    user_id: str
     name: str
     quantity: float
     unit: str
@@ -31,10 +32,10 @@ class InventoryRecord:
 class InventoryRepository(Protocol):
     """库存仓储协议：测试可注入内存实现，生产可注入 PostgreSQL 实现。"""
 
-    def create(self, name: str, quantity: float, unit: str, expire_date: date, note: str | None = None) -> InventoryRecord:
+    def create(self, user_id: str, name: str, quantity: float, unit: str, expire_date: date, note: str | None = None) -> InventoryRecord:
         ...
 
-    def list_all(self) -> list[InventoryRecord]:
+    def list_all(self, user_id: str | None = None) -> list[InventoryRecord]:
         ...
 
     def get(self, item_id: UUID) -> InventoryRecord:
@@ -43,10 +44,10 @@ class InventoryRepository(Protocol):
     def adjust(self, item_id: UUID, delta: float, note: str | None = None) -> InventoryRecord:
         ...
 
-    def expiring_within(self, days: int) -> list[InventoryRecord]:
+    def expiring_within(self, days: int, user_id: str | None = None) -> list[InventoryRecord]:
         ...
 
-    def summary(self, days: int = 7) -> tuple[int, int]:
+    def summary(self, days: int = 7, user_id: str | None = None) -> tuple[int, int]:
         ...
 
     def delete(self, item_id: UUID) -> None:
@@ -60,14 +61,15 @@ class InMemoryInventoryRepository:
         self._items: dict[UUID, InventoryRecord] = {}
         self._lock = Lock()
 
-    def create(self, name: str, quantity: float, unit: str, expire_date: date, note: str | None = None) -> InventoryRecord:
+    def create(self, user_id: str, name: str, quantity: float, unit: str, expire_date: date, note: str | None = None) -> InventoryRecord:
         with self._lock:
-            # 同名、同单位、同过期日的食材视为同一批次，创建时自动合并数量。
+            # 同名、同单位、同过期日、同用户的食材视为同一批次，创建时自动合并数量。
             existing = next(
                 (
                     item
                     for item in self._items.values()
-                    if item.name.strip().lower() == name.strip().lower()
+                    if item.user_id == user_id
+                    and item.name.strip().lower() == name.strip().lower()
                     and item.unit.strip().lower() == unit.strip().lower()
                     and item.expire_date == expire_date
                 ),
@@ -77,6 +79,7 @@ class InMemoryInventoryRepository:
             if existing is not None:
                 merged = InventoryRecord(
                     id=existing.id,
+                    user_id=existing.user_id,
                     name=existing.name,
                     quantity=existing.quantity + quantity,
                     unit=existing.unit,
@@ -90,6 +93,7 @@ class InMemoryInventoryRepository:
 
             record = InventoryRecord(
                 id=uuid4(),
+                user_id=user_id,
                 name=name,
                 quantity=quantity,
                 unit=unit,
@@ -101,9 +105,12 @@ class InMemoryInventoryRepository:
             self._items[record.id] = record
             return record
 
-    def list_all(self) -> list[InventoryRecord]:
+    def list_all(self, user_id: str | None = None) -> list[InventoryRecord]:
         with self._lock:
-            return sorted(self._items.values(), key=lambda item: item.created_at, reverse=True)
+            items = self._items.values()
+            if user_id:
+                items = [i for i in items if i.user_id == user_id]
+            return sorted(items, key=lambda item: item.created_at, reverse=True)
 
     def get(self, item_id: UUID) -> InventoryRecord:
         with self._lock:
@@ -134,15 +141,18 @@ class InMemoryInventoryRepository:
             self._items[item_id] = updated
             return updated
 
-    def expiring_within(self, days: int) -> list[InventoryRecord]:
+    def expiring_within(self, days: int, user_id: str | None = None) -> list[InventoryRecord]:
         today = date.today()
         cutoff = today + timedelta(days=days)
         with self._lock:
-            return [item for item in self._items.values() if today <= item.expire_date <= cutoff]
+            items = self._items.values()
+            if user_id:
+                items = [i for i in items if i.user_id == user_id]
+            return [item for item in items if today <= item.expire_date <= cutoff]
 
-    def summary(self, days: int = 7) -> tuple[int, int]:
-        items = self.list_all()
-        expiring = len(self.expiring_within(days))
+    def summary(self, days: int = 7, user_id: str | None = None) -> tuple[int, int]:
+        items = self.list_all(user_id=user_id)
+        expiring = len(self.expiring_within(days, user_id=user_id))
         return len(items), expiring
 
     def delete(self, item_id: UUID) -> None:
@@ -162,12 +172,13 @@ class PostgresInventoryRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
-    def create(self, name: str, quantity: float, unit: str, expire_date: date, note: str | None = None) -> InventoryRecord:
+    def create(self, user_id: str, name: str, quantity: float, unit: str, expire_date: date, note: str | None = None) -> InventoryRecord:
         normalized_name = name.strip()
         normalized_unit = unit.strip()
-        # 数据库实现沿用“同名 + 同单位 + 同过期日合并”的业务规则。
+        # 数据库实现沿用"同名 + 同单位 + 同过期日 + 同用户合并"的业务规则。
         existing = self._db.scalar(
             select(Inventory)
+            .where(Inventory.user_id == user_id)
             .where(func.lower(Inventory.name) == normalized_name.lower())
             .where(func.lower(Inventory.unit) == normalized_unit.lower())
             .where(Inventory.expire_date == expire_date)
@@ -194,6 +205,7 @@ class PostgresInventoryRepository:
             return self._to_record(existing)
 
         entity = Inventory(
+            user_id=user_id,
             name=normalized_name,
             quantity=Decimal(str(quantity)),
             unit=normalized_unit,
@@ -216,8 +228,11 @@ class PostgresInventoryRepository:
         self._db.refresh(entity)
         return self._to_record(entity)
 
-    def list_all(self) -> list[InventoryRecord]:
-        entities = self._db.scalars(select(Inventory).order_by(Inventory.created_at.desc())).all()
+    def list_all(self, user_id: str | None = None) -> list[InventoryRecord]:
+        stmt = select(Inventory)
+        if user_id:
+            stmt = stmt.where(Inventory.user_id == user_id)
+        entities = self._db.scalars(stmt.order_by(Inventory.created_at.desc())).all()
         return [self._to_record(entity) for entity in entities]
 
     def get(self, item_id: UUID) -> InventoryRecord:
@@ -252,27 +267,35 @@ class PostgresInventoryRepository:
         self._db.refresh(entity)
         return self._to_record(entity)
 
-    def expiring_within(self, days: int) -> list[InventoryRecord]:
+    def expiring_within(self, days: int, user_id: str | None = None) -> list[InventoryRecord]:
         today = date.today()
         cutoff = today + timedelta(days=days)
-        entities = self._db.scalars(
+        stmt = (
             select(Inventory)
             .where(Inventory.expire_date >= today)
             .where(Inventory.expire_date <= cutoff)
-            .order_by(Inventory.expire_date.asc())
-        ).all()
+        )
+        if user_id:
+            stmt = stmt.where(Inventory.user_id == user_id)
+        entities = self._db.scalars(stmt.order_by(Inventory.expire_date.asc())).all()
         return [self._to_record(entity) for entity in entities]
 
-    def summary(self, days: int = 7) -> tuple[int, int]:
-        total = self._db.scalar(select(func.count()).select_from(Inventory)) or 0
+    def summary(self, days: int = 7, user_id: str | None = None) -> tuple[int, int]:
+        stmt = select(func.count()).select_from(Inventory)
+        if user_id:
+            stmt = stmt.where(Inventory.user_id == user_id)
+        total = self._db.scalar(stmt) or 0
         today = date.today()
         cutoff = today + timedelta(days=days)
-        expiring = self._db.scalar(
+        expiring_stmt = (
             select(func.count())
             .select_from(Inventory)
             .where(Inventory.expire_date >= today)
             .where(Inventory.expire_date <= cutoff)
-        ) or 0
+        )
+        if user_id:
+            expiring_stmt = expiring_stmt.where(Inventory.user_id == user_id)
+        expiring = self._db.scalar(expiring_stmt) or 0
         return int(total), int(expiring)
 
     def delete(self, item_id: UUID) -> None:
@@ -286,6 +309,7 @@ class PostgresInventoryRepository:
     def _to_record(entity: Inventory) -> InventoryRecord:
         return InventoryRecord(
             id=entity.id,
+            user_id=entity.user_id,
             name=entity.name,
             quantity=float(entity.quantity),
             unit=entity.unit,

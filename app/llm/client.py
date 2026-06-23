@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 
 from app.core.config import get_settings
-from app.core.errors import LLMError
+from app.core.errors import LLMError, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +102,18 @@ class DeepSeekClient:
 
 
 _client: DeepSeekClient | None = None
+
+
+def check_llm_available() -> None:
+    """Verify LLM is configured and ready.
+
+    Raises LLMUnavailableError when:
+    - API key is not configured (empty)
+    - Client initialization would fail due to missing configuration
+    """
+    settings = get_settings()
+    if not settings.deepseek_api_key:
+        raise LLMUnavailableError("DeepSeek API Key 未配置")
 
 
 def get_llm_client() -> DeepSeekClient:

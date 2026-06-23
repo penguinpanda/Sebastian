@@ -15,6 +15,7 @@ def test_postgres_repository_create_and_adjust_writes_transactions() -> None:
     with Session(engine) as db:
         repository = PostgresInventoryRepository(db)
         item = repository.create(
+            user_id="u1",
             name="Egg",
             quantity=10,
             unit="pcs",
@@ -37,6 +38,7 @@ def test_postgres_repository_adjust_negative_result_raises() -> None:
     with Session(engine) as db:
         repository = PostgresInventoryRepository(db)
         item = repository.create(
+            user_id="u1",
             name="Butter",
             quantity=1,
             unit="block",
@@ -57,8 +59,8 @@ def test_postgres_repository_create_merges_same_item() -> None:
     with Session(engine) as db:
         repository = PostgresInventoryRepository(db)
         expire_date = date.today() + timedelta(days=4)
-        first = repository.create(name="Egg", quantity=2, unit="pcs", expire_date=expire_date)
-        second = repository.create(name="egg", quantity=3, unit="PCS", expire_date=expire_date)
+        first = repository.create(user_id="u1", name="Egg", quantity=2, unit="pcs", expire_date=expire_date)
+        second = repository.create(user_id="u1", name="egg", quantity=3, unit="PCS", expire_date=expire_date)
 
         assert first.id == second.id
         assert second.quantity == 5
@@ -71,6 +73,7 @@ def test_postgres_repository_delete_item() -> None:
     with Session(engine) as db:
         repository = PostgresInventoryRepository(db)
         item = repository.create(
+            user_id="u1",
             name="Cheese",
             quantity=1,
             unit="pack",

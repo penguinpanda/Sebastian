@@ -1,22 +1,37 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
+from app.models.meal import MealHistory
+from app.models.user_profile import UserProfile
 from app.repositories.inventory import PostgresInventoryRepository
 from app.schemas.mcp import MCPErrorResponse, MCPInvokeRequest, MCPInvokeResponse, MCPToolSpec, MCPToolsResponse
-from app.schemas.agent_tools import EquipmentCheckRequest, HealthAnalyzeRequest, RecipeRecommendRequest, SearchAnswerRequest
+from app.schemas.agent_tools import (
+    EquipmentCheckRequest,
+    HealthAnalyzeRequest,
+    InventoryOnlyRecipeRequest,
+    RecipeRecommendRequest,
+    SearchAnswerRequest,
+)
 from app.services.equipment_agent_service import EquipmentAgentService
 from app.services.inventory_service import InventoryService
 from app.services.mcp_adapter import MCPInvocationError, MCPToolAdapter
 from app.services.health_agent_service import HealthAgentService
 from app.services.recipe_agent_service import RecipeAgentService
 from app.services.search_agent_service import SearchAgentService
-from app.orchestration.agent_graphs import run_equipment_agent, run_health_agent, run_recipe_agent, run_search_agent
+from app.orchestration.agent_graphs import (
+    run_equipment_agent,
+    run_health_agent,
+    run_recipe_agent,
+    run_recipe_agent_inventory_only,
+    run_search_agent,
+)
 
 router = APIRouter(prefix="/mcp")
 
@@ -104,6 +119,24 @@ def _build_tool_specs() -> list[MCPToolSpec]:
             timeout_ms=5000,
             idempotency_key_required=False,
         ),
+        MCPToolSpec(
+            name="recipe.recommend-from-inventory",
+            description="仅使用当前库存食材生成菜谱，不推荐任何库存之外的食材",
+            input_schema={
+                "type": "object",
+                "required": ["user_id"],
+                "properties": {
+                    "user_id": {"type": "string"},
+                    "meal_type": {"type": "string", "enum": ["breakfast", "lunch", "dinner", "snack"]},
+                    "target_calories": {"type": "integer", "minimum": 200, "maximum": 2000},
+                    "available_equipment": {"type": "array", "items": {"type": "string"}},
+                    "dietary_preferences": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+            output_schema={"type": "object", "properties": {"title": {"type": "string"}, "steps": {"type": "array"}}},
+            timeout_ms=8000,
+            idempotency_key_required=False,
+        ),
     ]
 
 
@@ -123,14 +156,16 @@ def get_mcp_adapter(db: Session = Depends(get_db_session)) -> MCPToolAdapter:
         days = int(payload.get("days", 7))
         if days < 1 or days > 365:
             raise ValueError("days must be between 1 and 365")
-        summary = inventory_service.summary(days=days)
+        user_id = payload.get("user_id")
+        summary = inventory_service.summary(days=days, user_id=user_id)
         return {"days": days, "total_items": summary.total_items, "expiring_soon": summary.expiring_soon}
 
     def inventory_expiring_handler(payload: dict[str, Any]) -> dict[str, Any]:
         days = int(payload.get("days", 7))
         if days < 1 or days > 365:
             raise ValueError("days must be between 1 and 365")
-        items = inventory_service.expiring_items(days)
+        user_id = payload.get("user_id")
+        items = inventory_service.expiring_items(days, user_id=user_id)
         return {
             "days": days,
             "items": [
@@ -151,7 +186,34 @@ def get_mcp_adapter(db: Session = Depends(get_db_session)) -> MCPToolAdapter:
         return response.model_dump(mode="json")
 
     def health_analyze_handler(payload: dict[str, Any]) -> dict[str, Any]:
-        response = run_health_agent(HealthAnalyzeRequest.model_validate(payload), service=health_service)
+        request = HealthAnalyzeRequest.model_validate(payload)
+
+        # 查询用户健康档案，补充缺失的身高体重
+        profile = db.execute(
+            select(UserProfile).where(UserProfile.user_id == request.user_id)
+        ).scalars().first()
+        if profile:
+            if profile.height_cm and request.height_cm == 0:
+                request.height_cm = profile.height_cm
+            if profile.weight_kg and request.weight_kg == 0:
+                request.weight_kg = profile.weight_kg
+
+        # 查询饮食历史
+        cutoff = date.today() - timedelta(days=7)
+        stmt = select(MealHistory).where(
+            MealHistory.user_id == request.user_id,
+            MealHistory.meal_date >= cutoff,
+        )
+        rows = db.execute(stmt).scalars().all()
+        meal_history = [
+            {"title": m.recipe_title, "calories": m.estimated_calories,
+             "meal_date": str(m.meal_date), "confirmed_at": m.confirmed_at.isoformat()}
+            for m in rows
+        ]
+        if meal_history:
+            response = health_service.analyze_with_history(request, meal_history, days=7)
+        else:
+            response = health_service.analyze(request)
         return response.model_dump(mode="json")
 
     def equipment_check_handler(payload: dict[str, Any]) -> dict[str, Any]:
@@ -162,10 +224,17 @@ def get_mcp_adapter(db: Session = Depends(get_db_session)) -> MCPToolAdapter:
         response = run_search_agent(SearchAnswerRequest.model_validate(payload), service=search_service)
         return response.model_dump(mode="json")
 
+    def recipe_recommend_from_inventory_handler(payload: dict[str, Any]) -> dict[str, Any]:
+        response = run_recipe_agent_inventory_only(
+            InventoryOnlyRecipeRequest.model_validate(payload), recipe_service=recipe_service
+        )
+        return response.model_dump(mode="json")
+
     handlers = {
         "inventory.summary": inventory_summary_handler,
         "inventory.expiring": inventory_expiring_handler,
         "recipe.recommend": recipe_recommend_handler,
+        "recipe.recommend-from-inventory": recipe_recommend_from_inventory_handler,
         "health.analyze": health_analyze_handler,
         "equipment.check": equipment_check_handler,
         "search.answer": search_answer_handler,

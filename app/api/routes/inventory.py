@@ -30,16 +30,20 @@ def create_inventory_item(
 
 
 @router.get("", response_model=list[InventoryRead])
-def list_inventory_items(service: InventoryService = Depends(get_inventory_service)) -> list[InventoryRead]:
-    return service.list_items()
+def list_inventory_items(
+    user_id: str = Query(default="default", min_length=1, max_length=64),
+    service: InventoryService = Depends(get_inventory_service),
+) -> list[InventoryRead]:
+    return service.list_items(user_id=user_id)
 
 
 @router.get("/summary", response_model=InventorySummary)
 def get_inventory_summary(
     days: int = Query(default=7, ge=1, le=365),
+    user_id: str = Query(default="default", min_length=1, max_length=64),
     service: InventoryService = Depends(get_inventory_service),
 ) -> InventorySummary:
-    return service.summary(days)
+    return service.summary(days, user_id=user_id)
 
 
 @router.get("/{item_id}", response_model=InventoryRead)
@@ -82,7 +86,8 @@ def delete_inventory_item(
 @router.get("/alerts/expiring", response_model=list[ExpiringInventoryItem])
 def list_expiring_items(
     days: int = Query(default=7, ge=1, le=365),
+    user_id: str = Query(default="default", min_length=1, max_length=64),
     service: InventoryService = Depends(get_inventory_service),
 ) -> list[ExpiringInventoryItem]:
     """返回未来 days 天内到期的库存，供首页提醒和定时任务复用。"""
-    return service.expiring_items(days)
+    return service.expiring_items(days, user_id=user_id)

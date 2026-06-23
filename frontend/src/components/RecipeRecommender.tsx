@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { mcpAPI } from '../services/api';
+import { mcpAPI, mealAPI } from '../services/api';
 import { DEFAULT_RECIPE_FORM } from '../data/defaultTestData';
 import { RecipeRecommendResponse } from '../types';
 import ErrorState from './common/ErrorState';
@@ -14,6 +14,9 @@ export default function RecipeRecommender({ userId }: Props) {
   const [result, setResult] = useState<RecipeRecommendResponse | null>(null);
   const [error, setError] = useState('');
   const [form, setForm] = useState(DEFAULT_RECIPE_FORM);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmResult, setConfirmResult] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
 
   const equipment = ['pan', 'pot', 'oven', 'microwave', 'rice_cooker', 'blender'];
   const preferences = ['high-protein', 'low-fat', 'vegetarian', 'low-carb'];
@@ -24,6 +27,8 @@ export default function RecipeRecommender({ userId }: Props) {
     e.preventDefault();
     setIsSubmitting(true);
     setError('');
+    setConfirmResult('');
+    setConfirmed(false);
 
     if (!isCaloriesValid) {
       setError('目标热量必须在 200-2000 之间');
@@ -44,6 +49,27 @@ export default function RecipeRecommender({ userId }: Props) {
       setError(getFriendlyError(err, '菜谱推荐失败'));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmMeal = async () => {
+    if (!result || confirming) return;
+    setConfirming(true);
+    setConfirmResult('');
+    try {
+      const res = await mealAPI.confirm(result, userId);
+      const data = res.data as any;
+      const deductedNames = (data.deducted || []).map((d: any) => `${d.name} ${d.amount}${d.unit}`).join('、');
+      const missingNames = (data.missing || []).map((m: any) => `${m.name} ${m.amount}${m.unit}`).join('、');
+      let msg = `✅ 已确认制作！`;
+      if (deductedNames) msg += ` 已从库存扣除：${deductedNames}。`;
+      if (missingNames) msg += ` ⚠️ 库存不足：${missingNames}。`;
+      setConfirmResult(msg);
+      setConfirmed(true);
+    } catch (err: unknown) {
+      setConfirmResult(`❌ ${getFriendlyError(err, '确认制作失败')}`);
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -167,6 +193,17 @@ export default function RecipeRecommender({ userId }: Props) {
               </div>
             )}
 
+            {result.ingredients && result.ingredients.length > 0 && (
+              <div>
+                <h3 className="font-semibold text-lg mb-2">🛒 所需食材</h3>
+                <ul className="list-disc list-inside space-y-1 text-gray-700">
+                  {result.ingredients.map((ing, i) => (
+                    <li key={i}>{ing.name} — {ing.amount} {ing.unit}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {result.missing_ingredients.length > 0 && (
               <div>
                 <h3 className="font-semibold text-lg mb-2 text-orange-700">❌ 缺少食材</h3>
@@ -177,6 +214,24 @@ export default function RecipeRecommender({ userId }: Props) {
                 </ul>
               </div>
             )}
+
+            {/* 确认制作按钮 */}
+            <div className="pt-3 border-t">
+              {!confirmed ? (
+                <button
+                  onClick={handleConfirmMeal}
+                  disabled={confirming}
+                  className="btn bg-green-600 hover:bg-green-700 text-white w-full"
+                >
+                  {confirming ? '处理中...' : '✅ 确认制作'}
+                </button>
+              ) : null}
+              {confirmResult && (
+                <p className={`mt-2 text-sm ${confirmResult.startsWith('✅') ? 'text-green-700' : 'text-red-600'}`}>
+                  {confirmResult}
+                </p>
+              )}
+            </div>
 
             {result._audit?.trace_id && (
               <div className="pt-3 border-t">

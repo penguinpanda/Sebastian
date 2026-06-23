@@ -7,8 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db_session
+from app.core.errors import LLMUnavailableError, llm_unavailable_message
 from app.models.agent import AgentTask, ToolCallLog
-from app.orchestration.graph import run_inventory_agent
+from app.orchestration.graph import run_router_agent
 from app.services.agent_rate_limiter import check_agent_rate_limit
 from app.services.agent_task_cache import get_agent_task_status, set_agent_task_status
 from app.services.agent_task_queue import enqueue_agent_task, get_agent_queue_size
@@ -53,7 +54,7 @@ def chat(payload: ChatRequest, request: Request, db: Session = Depends(get_db_se
     task = AgentTask(
         id=uuid4(),
         user_id=payload.user_id,
-        task_type="inventory_chat",
+        task_type="router_chat",
         status="running",
         input_payload={"message": payload.message},
         created_at=datetime.now(timezone.utc),
@@ -74,7 +75,7 @@ def chat(payload: ChatRequest, request: Request, db: Session = Depends(get_db_se
     reply = ""
 
     try:
-        reply = run_inventory_agent(payload.message, user_id=payload.user_id)
+        reply = run_router_agent(payload.message, user_id=payload.user_id)
         task.status = "completed"
         task.output_payload = {"reply": reply}
         set_agent_task_status(
@@ -83,10 +84,20 @@ def chat(payload: ChatRequest, request: Request, db: Session = Depends(get_db_se
             user_id=payload.user_id,
             detail={"reply": reply},
         )
-    except Exception as exc:
-        # 失败也落库，调用方拿到 task_id 后仍能查询到失败原因。
+    except LLMUnavailableError as exc:
         error_detail = str(exc)
-        reply = "Something went wrong. Please try again."
+        reply = llm_unavailable_message()
+        task.status = "failed"
+        task.output_payload = {"error": error_detail}
+        set_agent_task_status(
+            str(task.id),
+            "failed",
+            user_id=payload.user_id,
+            detail={"error": error_detail},
+        )
+    except Exception as exc:
+        error_detail = str(exc)
+        reply = f"服务器内部错误。{llm_unavailable_message()}"
         task.status = "failed"
         task.output_payload = {"error": error_detail}
         set_agent_task_status(
@@ -101,7 +112,7 @@ def chat(payload: ChatRequest, request: Request, db: Session = Depends(get_db_se
         id=uuid4(),
         task_id=task.id,
         trace_id=trace_id,
-        tool_name="inventory_agent_graph",
+        tool_name="router_agent_graph",
         latency_ms=latency_ms,
         result_status="ok" if not error_detail else "error",
         error_detail=error_detail,

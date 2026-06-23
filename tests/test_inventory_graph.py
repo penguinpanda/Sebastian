@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
+from app.core.errors import llm_unavailable_message
 from app.orchestration.graph import run_inventory_agent
 
 
@@ -34,4 +33,4 @@ def test_inventory_agent_graph_completes_with_intent(monkeypatch) -> None:
 def test_inventory_agent_graph_falls_back_on_empty_input() -> None:
     result = run_inventory_agent("   ", user_id="u-1")
 
-    assert result == "I'm not sure how to help with that. Please try rephrasing."
+    assert result == llm_unavailable_message()

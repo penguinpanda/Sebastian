@@ -10,6 +10,7 @@ from app.schemas.agent_tools import (
     EquipmentCheckResponse,
     HealthAnalyzeRequest,
     HealthAnalyzeResponse,
+    InventoryOnlyRecipeRequest,
     RecipeRecommendRequest,
     RecipeRecommendResponse,
     SearchAnswerRequest,
@@ -243,5 +244,38 @@ def run_recipe_agent(
         graph = _default_recipe_graph()
     else:
         graph = _build_recipe_graph(recipe_service=recipe_service, search_service=search_service, equipment_service=equipment_service)
+    result = graph.invoke({"request": payload})
+    return result["result"]
+
+
+# ---------- 仅使用库存材料生成菜谱（跳过搜索记忆和厨具检查） ----------
+
+def _build_recipe_graph_inventory_only(
+    recipe_service: RecipeAgentService | None = None,
+):
+    """仅使用库存材料生成菜谱的简化图：直接调用 Service，跳过搜索/厨具子图。"""
+    recipe_service = recipe_service or RecipeAgentService()
+
+    def execute(state: GraphState) -> GraphState:
+        request = _as_model(state["request"], InventoryOnlyRecipeRequest)
+        result = recipe_service.recommend_from_inventory_only(request)
+        return {"result": result}
+
+    return _build_single_step_graph(execute)
+
+
+@lru_cache(maxsize=1)
+def _default_recipe_graph_inventory_only():
+    return _build_recipe_graph_inventory_only()
+
+
+def run_recipe_agent_inventory_only(
+    payload: InventoryOnlyRecipeRequest,
+    recipe_service: RecipeAgentService | None = None,
+) -> RecipeRecommendResponse:
+    if recipe_service is None:
+        graph = _default_recipe_graph_inventory_only()
+    else:
+        graph = _build_recipe_graph_inventory_only(recipe_service=recipe_service)
     result = graph.invoke({"request": payload})
     return result["result"]
