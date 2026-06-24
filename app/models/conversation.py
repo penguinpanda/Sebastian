@@ -20,6 +20,7 @@ class Conversation(TimestampMixin, Base):
     user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     conversation_date: Mapped[date] = mapped_column(Date, nullable=False, default=lambda: date.today())
     messages: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True, comment="对话历史 LLM 摘要缓存")
     last_active_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

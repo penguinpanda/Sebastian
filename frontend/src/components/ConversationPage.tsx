@@ -376,7 +376,9 @@ export default function ConversationPage({ userId }: Props) {
 
     try {
       const res = await agentAPI.chat(prompt, userId);
-      appendMessage({ role: 'assistant', content: res.data.reply });
+      // A2A 响应: { task: {...}, direct_reply: "..." }
+      const reply = res.data.direct_reply ?? '';
+      appendMessage({ role: 'assistant', content: reply });
     } catch (err: unknown) {
       setError(getFriendlyError(err, '厨具推荐失败'));
     } finally {
@@ -403,7 +405,9 @@ export default function ConversationPage({ userId }: Props) {
         });
       } else {
         const res = await agentAPI.chat(trimmed, userId);
-        appendMessage({ role: 'assistant', content: res.data.reply });
+        // A2A 响应: { task: {...}, direct_reply: "..." }
+        const reply = res.data.direct_reply ?? '';
+        appendMessage({ role: 'assistant', content: reply });
       }
     } catch (err: unknown) {
       setError(getFriendlyError(err, '对话请求失败'));
