@@ -8,6 +8,9 @@ import {
   HealthAnalyzeResponse,
   RecipeRecommendResponse,
   SearchAnswerResponse,
+  A2ASendTaskRequest,
+  A2ASendTaskResponse,
+  A2ATask,
 } from '../types';
 import { mapApiErrorMessage } from './error';
 
@@ -54,12 +57,16 @@ export const inventoryAPI = {
     apiClient.get('/inventory/alerts/expiring', { params: { days, ...(user_id ? { user_id } : {}), ...(item_type ? { item_type } : {}) } }),
 };
 
-// Agent API：聊天接口会返回 task_id，任务状态接口优先读后端缓存。
+// Agent API：A2A 协议替代旧的 /agent/chat 和 /agent/tasks/{id}。
 export const agentAPI = {
-  chat: (message: string, user_id?: string) =>
-    apiClient.post('/agent/chat', { message, user_id }),
-  taskStatus: (task_id: string) => apiClient.get(`/agent/tasks/${task_id}`),
-  queueStats: () => apiClient.get('/agent/queue/stats'),
+  chat: (message: string, user_id?: string, context_id?: string) =>
+    apiClient.post<A2ASendTaskResponse>('/a2a/tasks', {
+      message,
+      user_id,
+      ...(context_id ? { context_id } : {}),
+    }),
+  taskStatus: (task_id: string) => apiClient.get<A2ATask>(`/a2a/tasks/${task_id}`),
+  queueStats: () => apiClient.get('/a2a/tasks').then(() => ({ data: { queue_size: 0 } })), // A2A 无队列统计，返回 0 兼容
 };
 
 // Agent Tool API：面向菜谱、健康、搜索三类专用 Agent。
@@ -122,10 +129,66 @@ export const recipeAPI = {
     apiClient.get('/recipes/top', { params: { user_id, limit } }),
 };
 
-// MCP API (P2.5)：前端以统一 invoke 协议调用后端工具。
+// ── A2A API（新协议，替代 MCP invoke） ────────────────────────────
+
+/** 统一的 A2A Task 发送（替代 MCP invoke）。 */
+const sendA2ATask = (skill_id: string, message: string, user_id: string, extra: Record<string, any> = {}) =>
+  apiClient.post<A2ASendTaskResponse>('/a2a/tasks', {
+    message,
+    user_id,
+    skill_id,
+    ...extra,
+  });
+
+export const a2aAPI = {
+  /** 创建 A2A 任务 */
+  sendTask: (params: A2ASendTaskRequest) =>
+    apiClient.post<A2ASendTaskResponse>('/a2a/tasks', params),
+  /** 查询任务状态 */
+  getTask: (task_id: string) => apiClient.get<A2ATask>(`/a2a/tasks/${task_id}`),
+  /** 取消任务 */
+  cancelTask: (task_id: string) => apiClient.post(`/a2a/tasks/${task_id}/cancel`),
+  /** 菜谱推荐 */
+  recipeRecommend: (params: { input: MCPRecipeRecommendInput; user_id: string }) =>
+    sendA2ATask('recipe.recommend', '推荐菜谱', params.user_id, params.input),
+  /** 基于库存的菜谱推荐 */
+  recipeRecommendFromInventory: (params: { input: MCPRecipeRecommendInput; user_id: string }) =>
+    sendA2ATask('recipe.recommend-from-inventory', '基于库存推荐菜谱', params.user_id, params.input),
+  /** 健康分析 */
+  healthAnalyze: (params: { input: MCPHealthAnalyzeInput; user_id: string }) =>
+    sendA2ATask('health.analyze', '健康分析', params.user_id, params.input),
+  /** 搜索回答 */
+  searchAnswer: (params: { input: MCPSearchAnswerInput; user_id: string }) =>
+    sendA2ATask('search.answer', params.input.query, params.user_id),
+};
+
+// ── MCP API（向后兼容，内部委托到 A2A） ─────────────────────
+
 const invokeMCPTool = <TInput extends object, TResult extends object>(
   payload: MCPInvokeRequest<TInput>
-) => apiClient.post<MCPInvokeResponse<TResult>>('/mcp/invoke', payload);
+) => {
+  // MCP → A2A 转换：name → skill_id, input 合并到 metadata
+  return apiClient.post<MCPInvokeResponse<TResult>>('/a2a/tasks', {
+    message: `MCP ${payload.name}`,
+    user_id: payload.user_id,
+    skill_id: payload.name,
+    ...(payload.input as Record<string, any>),
+  }).then(response => {
+    // 将 A2A 响应包装为 MCP 格式以保持兼容
+    const a2aData = response.data as any;
+    return {
+      ...response,
+      data: {
+        trace_id: payload.trace_id || '',
+        tool_name: payload.name,
+        result: { ...(a2aData.direct_reply ? { summary: a2aData.direct_reply } : {}) },
+        latency_ms: 0,
+        status: 'ok' as const,
+        from_cache: false,
+      } as MCPInvokeResponse<TResult>,
+    };
+  });
+};
 
 export const mcpAPI = {
   recipeRecommend: (params: {

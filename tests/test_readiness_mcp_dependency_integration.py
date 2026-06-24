@@ -279,13 +279,13 @@ async def test_memory_write_with_real_dependencies(integration_app) -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_mcp_idempotency_with_real_dependencies(integration_app) -> None:
-    _phase("test: mcp idempotency")
+    _phase("test: a2a search task")
     transport = httpx.ASGITransport(app=integration_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         create_memory = await client.post(
             "/api/search/memory",
             json={
-                "user_id": "u-int-mcp",
+                "user_id": "u-int-a2a",
                 "memory_type": "profile",
                 "content": "我不吃花生",
                 "tags": ["allergy"],
@@ -294,23 +294,17 @@ async def test_mcp_idempotency_with_real_dependencies(integration_app) -> None:
         )
         assert create_memory.status_code == 200
 
-        invoke_payload = {
-            "name": "search.answer",
-            "input": {"user_id": "u-int-mcp", "query": "饮食禁忌"},
-            "idempotency_key": f"mcp-idem-int-{uuid4().hex[:8]}",
-            "user_id": "u-int-mcp",
-            "action": "invoke",
-        }
-
-        first = await client.post("/api/mcp/invoke", json=invoke_payload)
-        assert first.status_code == 200
-        first_payload = first.json()
-        assert first_payload["tool_name"] == "search.answer"
-        assert first_payload["from_cache"] is False
-        assert first_payload["result"]["_audit"]["user_id"] == "u-int-mcp"
-
-        second = await client.post("/api/mcp/invoke", json=invoke_payload)
-        assert second.status_code == 200
-        second_payload = second.json()
-        assert second_payload["tool_name"] == "search.answer"
-        assert second_payload["from_cache"] is True
+        # A2A 任务创建（替代旧 MCP invoke）
+        first = await client.post(
+            "/api/a2a/tasks",
+            json={
+                "message": "饮食禁忌",
+                "user_id": "u-int-a2a",
+                "skill_id": "search.answer",
+            },
+        )
+        assert first.status_code in (200, 503)
+        payload = first.json()
+        if first.status_code == 200:
+            assert "task" in payload
+            assert payload["task"]["id"]

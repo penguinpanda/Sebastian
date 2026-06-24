@@ -16,6 +16,11 @@ class AgentTask(Base):
     user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     task_type: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    # A2A 扩展字段
+    context_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True, comment="A2A 会话上下文 ID")
+    agent_name: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True, comment="处理该任务的 Agent 名称")
+    a2a_status: Mapped[str | None] = mapped_column(String(20), nullable=True, comment="A2A 任务状态")
+    artifacts: Mapped[list | None] = mapped_column(JSON, nullable=True, comment="A2A 任务产出列表")
     input_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     output_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

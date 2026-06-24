@@ -93,6 +93,17 @@ async def validation_error_handler(request: Request, exc: ValidationError) -> JS
 app.include_router(api_router)
 
 
+# ── A2A Well-Known Agent Card ──────────────────────────────────
+from app.a2a.agent_card import build_global_agent_card
+
+
+@app.get("/.well-known/agent.json")
+async def well_known_agent_card(request: Request):
+    """A2A 标准 Agent Card 端点。"""
+    base_url = str(request.base_url).rstrip("/")
+    return build_global_agent_card(base_url).model_dump()
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {"name": settings.app_name, "environment": settings.app_env}

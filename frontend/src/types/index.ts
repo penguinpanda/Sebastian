@@ -118,6 +118,64 @@ export interface MCPSearchAnswerInput {
   query: string;
 }
 
+// ── A2A 协议类型 ──────────────────────────────────────────
+
+/** A2A 任务状态 */
+export type A2ATaskState = 'submitted' | 'working' | 'completed' | 'failed' | 'canceled';
+
+/** A2A 任务状态快照 */
+export interface A2ATaskStatus {
+  state: A2ATaskState;
+  message: string;
+  timestamp: string;
+}
+
+/** A2A 任务产出 */
+export interface A2AArtifact {
+  artifact_id: string;
+  parts: A2APart[];
+  metadata: Record<string, any>;
+  index: number;
+}
+
+/** A2A 消息片段 */
+export interface A2ATextPart {
+  type: 'text';
+  text: string;
+}
+export interface A2ADataPart {
+  type: 'data';
+  data: Record<string, any>;
+}
+export type A2APart = A2ATextPart | A2ADataPart;
+
+/** A2A 任务 */
+export interface A2ATask {
+  id: string;
+  context_id: string | null;
+  status: A2ATaskStatus;
+  artifacts: A2AArtifact[];
+  history: any[];
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A2A 发送任务请求 */
+export interface A2ASendTaskRequest {
+  message: string;
+  user_id?: string;
+  context_id?: string;
+  skill_id?: string;
+  metadata?: Record<string, any>;
+}
+
+/** A2A 发送任务响应 */
+export interface A2ASendTaskResponse {
+  task: A2ATask;
+  direct_reply: string | null;
+}
+
 // ========== 注册表单 ==========
 
 export interface RegisterPreferencesData {

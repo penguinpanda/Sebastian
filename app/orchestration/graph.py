@@ -167,12 +167,47 @@ def _build_router_graph() -> StateGraph:
 
 
 @lru_cache(maxsize=1)
-def get_router_graph():
+def get_legacy_router_graph():
+    """旧版硬编码 Router Graph（回退用）。"""
     return _build_router_graph().compile()
 
 
 def run_router_agent(user_input: str, user_id: str | None = None) -> str:
-    """全局路由入口：识别意图 → 分发 Agent → 返回回复。"""
-    compiled = get_router_graph()
-    result: AgentState = compiled.invoke({"user_input": user_input, "user_id": user_id})
-    return result.get("final_answer") or llm_unavailable_message()
+    """全局路由入口。
+
+    优先使用 A2A RouterAgent（支持 A2A 协议 + 上下文管理）；
+    当 A2A RouterAgent 不可用时，回退到旧版硬编码 dispatch。
+    """
+    try:
+        from app.agents.router_agent import RouterAgent
+        from app.a2a.client import InternalA2AClient
+        import asyncio
+
+        client = InternalA2AClient()
+        # 注册所有子 Agent
+        from app.agents import RecipeAgent, HealthAgent, SearchAgent, EquipmentAgent, InventoryAgent
+        client.register_agent("recipe", RecipeAgent())
+        client.register_agent("health", HealthAgent())
+        client.register_agent("search", SearchAgent())
+        client.register_agent("equipment", EquipmentAgent())
+        client.register_agent("inventory", InventoryAgent())
+
+        router = RouterAgent(a2a_client=client)
+
+        # 同步封装
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            return router.run(user_input, user_id=user_id)
+        else:
+            return asyncio.run(router.run_async(user_input, user_id=user_id))
+
+    except Exception as exc:
+        logger.warning("A2A RouterAgent failed, falling back to legacy dispatch: %s", exc)
+        # 回退到旧版硬编码 dispatch
+        compiled = get_legacy_router_graph()
+        result: AgentState = compiled.invoke({"user_input": user_input, "user_id": user_id})
+        return result.get("final_answer") or llm_unavailable_message()
