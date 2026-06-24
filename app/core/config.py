@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     deepseek_api_key: str = Field(default="")
     deepseek_base_url: str = Field(default="https://api.deepseek.com")
     deepseek_model: str = Field(default="deepseek-chat")
-    llm_timeout_ms: int = Field(default=5000)
+    llm_timeout_ms: int = Field(default=30000)
     llm_retry_max: int = Field(default=2)
     database_url: str = Field(default="postgresql+psycopg://sebastian:sebastian@localhost:5432/sebastian")
     db_pool_size: int = Field(default=10)

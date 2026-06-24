@@ -1,12 +1,10 @@
 import axios from 'axios';
 import {
-  MCPEquipmentCheckInput,
-  MCPHealthAnalyzeInput,
   MCPInvokeRequest,
   MCPInvokeResponse,
   MCPRecipeRecommendInput,
+  MCPHealthAnalyzeInput,
   MCPSearchAnswerInput,
-  EquipmentCheckResponse,
   HealthAnalyzeResponse,
   RecipeRecommendResponse,
   SearchAnswerResponse,
@@ -42,18 +40,18 @@ apiClient.interceptors.response.use(
 
 // 库存 API：对应后端 /api/inventory 路由。
 export const inventoryAPI = {
-  list: (user_id?: string) =>
-    apiClient.get('/inventory', { params: user_id ? { user_id } : {} }),
+  list: (user_id?: string, item_type?: string) =>
+    apiClient.get('/inventory', { params: { ...(user_id ? { user_id } : {}), ...(item_type ? { item_type } : {}) } }),
   create: (data: any) =>
     apiClient.post('/inventory', data, { headers: { 'Content-Type': 'application/json' } }),
   get: (id: string) => apiClient.get(`/inventory/${id}`),
   remove: (id: string) => apiClient.delete(`/inventory/${id}`),
   adjust: (id: string, delta: number, note?: string) =>
     apiClient.patch(`/inventory/${id}/adjust`, { delta, note }),
-  summary: (days: number = 7, user_id?: string) =>
-    apiClient.get('/inventory/summary', { params: { days, ...(user_id ? { user_id } : {}) } }),
-  expiring: (days: number = 7, user_id?: string) =>
-    apiClient.get('/inventory/alerts/expiring', { params: { days, ...(user_id ? { user_id } : {}) } }),
+  summary: (days: number = 7, user_id?: string, item_type?: string) =>
+    apiClient.get('/inventory/summary', { params: { days, ...(user_id ? { user_id } : {}), ...(item_type ? { item_type } : {}) } }),
+  expiring: (days: number = 7, user_id?: string, item_type?: string) =>
+    apiClient.get('/inventory/alerts/expiring', { params: { days, ...(user_id ? { user_id } : {}), ...(item_type ? { item_type } : {}) } }),
 };
 
 // Agent API：聊天接口会返回 task_id，任务状态接口优先读后端缓存。
@@ -64,13 +62,12 @@ export const agentAPI = {
   queueStats: () => apiClient.get('/agent/queue/stats'),
 };
 
-// Agent Tool API：面向菜谱、健康、厨具、搜索四类专用 Agent。
+// Agent Tool API：面向菜谱、健康、搜索三类专用 Agent。
 export const agentToolsAPI = {
   recipeRecommend: (data: any) => apiClient.post('/agents/recipe/recommend', data),
   recipeRecommendFromInventory: (data: any) =>
     apiClient.post('/agents/recipe/recommend-from-inventory', data),
   healthAnalyze: (data: any) => apiClient.post('/agents/health/analyze', data),
-  equipmentCheck: (data: any) => apiClient.post('/agents/equipment/check', data),
   searchAnswer: (data: any) => apiClient.post('/agents/search/answer', data),
 };
 
@@ -156,22 +153,6 @@ export const mcpAPI = {
   }) =>
     invokeMCPTool<MCPHealthAnalyzeInput, HealthAnalyzeResponse>({
       name: 'health.analyze',
-      input: params.input,
-      user_id: params.user_id,
-      action: params.action ?? 'invoke',
-      idempotency_key: params.idempotency_key,
-      trace_id: params.trace_id,
-    }),
-
-  equipmentCheck: (params: {
-    input: MCPEquipmentCheckInput;
-    user_id: string;
-    action?: string;
-    idempotency_key?: string;
-    trace_id?: string;
-  }) =>
-    invokeMCPTool<MCPEquipmentCheckInput, EquipmentCheckResponse>({
-      name: 'equipment.check',
       input: params.input,
       user_id: params.user_id,
       action: params.action ?? 'invoke',

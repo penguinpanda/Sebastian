@@ -28,6 +28,7 @@ def test_scan_expiring_inventory_task(monkeypatch) -> None:
             return [
                 ExpiringInventoryItem(
                     id=uuid4(),
+                    item_type="ingredient",
                     name="Milk",
                     quantity=1,
                     unit="bottle",

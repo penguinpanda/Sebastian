@@ -1,6 +1,7 @@
 export const DEFAULT_TEST_USER_ID = 'user-001';
 
 export const DEFAULT_INVENTORY_ITEM = {
+  item_type: 'ingredient' as const,
   name: '鸡蛋',
   quantity: 12,
   unit: '个',
@@ -15,10 +16,6 @@ export const DEFAULT_HEALTH_FORM = {
   daily_calories_taken: 1900,
 };
 
-export const DEFAULT_EQUIPMENT_FORM = {
-  owned: '平底锅,砂锅,刀,砧板,微波炉',
-  required: '平底锅,烤箱,高压锅',
-};
 
 export const DEFAULT_RECIPE_FORM = {
   meal_type: 'dinner' as const,

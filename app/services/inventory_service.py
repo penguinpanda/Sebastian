@@ -33,11 +33,12 @@ class InventoryService:
             unit=payload.unit.strip(),
             expire_date=payload.expire_date,
             note=payload.note.strip() if payload.note else None,
+            item_type=payload.item_type.strip(),
         )
         return self._to_read(record)
 
-    def list_items(self, user_id: str | None = None) -> list[InventoryRead]:
-        return [self._to_read(record) for record in self._repository.list_all(user_id=user_id)]
+    def list_items(self, user_id: str | None = None, item_type: str | None = None) -> list[InventoryRead]:
+        return [self._to_read(record) for record in self._repository.list_all(user_id=user_id, item_type=item_type)]
 
     def get_item(self, item_id: UUID) -> InventoryRead:
         return self._to_read(self._repository.get(item_id))
@@ -52,13 +53,14 @@ class InventoryService:
             raise ValidationError(str(exc)) from exc
         return self._to_read(record)
 
-    def expiring_items(self, days: int, user_id: str | None = None) -> list[ExpiringInventoryItem]:
+    def expiring_items(self, days: int, user_id: str | None = None, item_type: str | None = None) -> list[ExpiringInventoryItem]:
         """把仓储记录转换成前端更关心的 days_left 展示字段。"""
         today = date.today()
-        items = self._repository.expiring_within(days, user_id=user_id)
+        items = self._repository.expiring_within(days, user_id=user_id, item_type=item_type)
         return [
             ExpiringInventoryItem(
                 id=record.id,
+                item_type=record.item_type,
                 name=record.name,
                 quantity=record.quantity,
                 unit=record.unit,
@@ -68,8 +70,8 @@ class InventoryService:
             for record in items
         ]
 
-    def summary(self, days: int = 7, user_id: str | None = None) -> InventorySummary:
-        total_items, expiring_soon = self._repository.summary(days, user_id=user_id)
+    def summary(self, days: int = 7, user_id: str | None = None, item_type: str | None = None) -> InventorySummary:
+        total_items, expiring_soon = self._repository.summary(days, user_id=user_id, item_type=item_type)
         return InventorySummary(total_items=total_items, expiring_soon=expiring_soon)
 
     def delete_item(self, item_id: UUID) -> None:
@@ -84,7 +86,7 @@ class InventoryService:
         missing: list[dict] = []
         errors: list[str] = []
 
-        all_items = self._repository.list_all(user_id=user_id)
+        all_items = self._repository.list_all(user_id=user_id, item_type="ingredient")
 
         for ingredient in ingredients:
             target = ingredient.name.strip().lower()
@@ -129,6 +131,7 @@ class InventoryService:
         return InventoryRead(
             id=record.id,
             user_id=record.user_id,
+            item_type=record.item_type,
             name=record.name,
             quantity=record.quantity,
             unit=record.unit,

@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 class InventoryCreate(BaseModel):
     user_id: str = Field(default="default", min_length=1, max_length=64)
+    item_type: str = Field(default="ingredient", min_length=1, max_length=20)
     name: str = Field(min_length=1, max_length=120)
     quantity: float = Field(gt=0)
     unit: str = Field(min_length=1, max_length=20)
@@ -57,6 +58,7 @@ class InventoryAdjust(BaseModel):
 class InventoryRead(BaseModel):
     id: UUID
     user_id: str
+    item_type: str
     name: str
     quantity: float
     unit: str
@@ -77,6 +79,7 @@ class InventoryRead(BaseModel):
 # 剩余3天过期
 # ============================================================
 class ExpiringInventoryItem(BaseModel):
+    item_type: str
     id: UUID
     name: str
     quantity: float

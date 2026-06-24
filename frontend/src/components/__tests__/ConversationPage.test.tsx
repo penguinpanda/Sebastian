@@ -22,6 +22,9 @@ const recipeResponse = {
     { name: '鸡蛋', amount: 2, unit: '个' },
     { name: '西兰花', amount: 100, unit: 'g' },
   ],
+  required_equipment: ['平底锅', '刀'],
+  feasible: true,
+  missing_equipment: [],
   missing_ingredients: ['牛油果'],
 };
 

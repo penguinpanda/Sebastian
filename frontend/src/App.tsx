@@ -1,25 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import InventoryManager from './components/InventoryManager';
+import InventoryPage from './components/InventoryPage';
 import ConversationPage from './components/ConversationPage';
-import EquipmentChecker from './components/EquipmentChecker';
 import MemorySearch from './components/MemorySearch';
 import ProfileForm from './components/ProfileForm';
 import RegisterPage from './components/RegisterPage';
 import { DEFAULT_TEST_USER_ID } from './data/defaultTestData';
 
-type Tab = 'chat' | 'inventory' | 'equipment' | 'memory' | 'profile';
+type Tab = 'chat' | 'inventory' | 'memory' | 'profile';
 
 const STORAGE_KEY = 'sebastian_user_id';
 const REGISTERED_KEY = 'sebastian_registered';
 
-// 预置用户 ID，含种子测试用 ID
+// 预置用户 ID
 const PRESET_USER_IDS = [
   DEFAULT_TEST_USER_ID,
-  'test-inv-only-001',
-  'test-inv-only-002',
-  'test-inv-only-003',
-  'test-inv-only-004',
-  'test-inv-only-005',
+  'test-happy-001',
 ];
 
 function loadSavedUserId(): string {
@@ -103,7 +98,6 @@ export default function App() {
   const tabs: Array<{ id: Tab; label: string; icon: string }> = [
     { id: 'chat', label: '对话', icon: '💬' },
     { id: 'inventory', label: '库存管理', icon: '📦' },
-    { id: 'equipment', label: '厨具检查', icon: '🔪' },
     { id: 'memory', label: '模型记忆', icon: '🧠' },
     { id: 'profile', label: '健康档案', icon: '🩺' },
   ];
@@ -219,8 +213,7 @@ export default function App() {
       {/* 内容区域 */}
       <main className="max-w-6xl mx-auto px-4 py-8">
         {activeTab === 'chat' && <ConversationPage userId={userId} />}
-        {activeTab === 'inventory' && <InventoryManager userId={userId} />}
-        {activeTab === 'equipment' && <EquipmentChecker userId={userId} />}
+        {activeTab === 'inventory' && <InventoryPage userId={userId} />}
         {activeTab === 'memory' && <MemorySearch userId={userId} />}
         {activeTab === 'profile' && <ProfileForm userId={userId} />}
       </main>

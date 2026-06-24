@@ -20,10 +20,10 @@ describe('InventoryManager', () => {
     vi.mocked(inventoryAPI.list).mockResolvedValue({ data: [] } as never);
     vi.mocked(inventoryAPI.expiring).mockResolvedValue({ data: [] } as never);
 
-    render(<InventoryManager userId="u-1" />);
+    render(<InventoryManager userId="u-1" itemType="ingredient" />);
 
     await waitFor(() => {
-      expect(screen.getByText('暂无库存，请添加食材')).toBeInTheDocument();
+      expect(screen.getByText('暂无食材，请添加')).toBeInTheDocument();
     });
   });
 
@@ -31,7 +31,7 @@ describe('InventoryManager', () => {
     vi.mocked(inventoryAPI.list).mockResolvedValue({ data: [] } as never);
     vi.mocked(inventoryAPI.expiring).mockResolvedValue({ data: [] } as never);
 
-    render(<InventoryManager userId="u-1" />);
+    render(<InventoryManager userId="u-1" itemType="ingredient" />);
 
     const nameInput = screen.getByPlaceholderText('食材名称');
     fireEvent.change(nameInput, { target: { value: '' } });

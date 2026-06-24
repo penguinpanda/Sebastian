@@ -1,5 +1,6 @@
 export interface Inventory {
   id: string;
+  item_type: 'ingredient' | 'equipment';
   name: string;
   quantity: number;
   unit: string;
@@ -11,6 +12,7 @@ export interface Inventory {
 
 export interface ExpiringInventory {
   id: string;
+  item_type: string;
   name: string;
   quantity: number;
   unit: string;
@@ -30,6 +32,9 @@ export interface RecipeRecommendResponse {
   estimated_calories: number;
   ingredients: RecipeIngredient[];
   steps: string[];
+  required_equipment: string[];
+  feasible: boolean;
+  missing_equipment: string[];
   missing_ingredients: string[];
   _audit?: MCPAudit;
 }
@@ -39,13 +44,6 @@ export interface HealthAnalyzeResponse {
   bmi_category: string;
   suggested_daily_calories: number;
   advice: string;
-  _audit?: MCPAudit;
-}
-
-export interface EquipmentCheckResponse {
-  feasible: boolean;
-  missing_equipment: string[];
-  suggestion: string;
   _audit?: MCPAudit;
 }
 
@@ -114,10 +112,6 @@ export interface MCPHealthAnalyzeInput {
   daily_calories_taken?: number;
 }
 
-export interface MCPEquipmentCheckInput {
-  equipment_owned?: string[];
-  required_equipment?: string[];
-}
 
 export interface MCPSearchAnswerInput {
   user_id: string;

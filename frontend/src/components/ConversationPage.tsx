@@ -43,14 +43,6 @@ const mealLabels: Record<MealType, string> = {
   snack: '零食',
 };
 
-const EQUIPMENT_OPTIONS = [
-  { value: 'pan', label: '平底锅' },
-  { value: 'pot', label: '汤锅' },
-  { value: 'oven', label: '烤箱' },
-  { value: 'microwave', label: '微波炉' },
-  { value: 'rice_cooker', label: '电饭煲' },
-  { value: 'blender', label: '搅拌机' },
-];
 const PREFERENCE_OPTIONS = [
   { value: 'high-protein', label: '高蛋白' },
   { value: 'low-fat', label: '低脂' },
@@ -103,6 +95,7 @@ export default function ConversationPage({ userId }: Props) {
   const [confirmStates, setConfirmStates] = useState<Record<string, ConfirmState>>({});
   const [recipeEdits, setRecipeEdits] = useState<Record<string, RecipeRecommendResponse>>({});
   const [rollbackStates, setRollbackStates] = useState<Record<string, boolean>>({});
+  const [kitchenwareRecStates, setKitchenwareRecStates] = useState<Record<string, boolean>>({});
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isCaloriesValid =
@@ -375,6 +368,22 @@ export default function ConversationPage({ userId }: Props) {
     }
   };
 
+  const handleKitchenwareRecommend = async (messageId: string, missingEquipment: string[]) => {
+    if (kitchenwareRecStates[messageId]) return;
+
+    setKitchenwareRecStates(prev => ({ ...prev, [messageId]: true }));
+    const prompt = `请推荐以下缺失厨具的替代方案或购买建议：${missingEquipment.join('、')}`;
+
+    try {
+      const res = await agentAPI.chat(prompt, userId);
+      appendMessage({ role: 'assistant', content: res.data.reply });
+    } catch (err: unknown) {
+      setError(getFriendlyError(err, '厨具推荐失败'));
+    } finally {
+      setKitchenwareRecStates(prev => ({ ...prev, [messageId]: false }));
+    }
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = input.trim();
@@ -446,26 +455,6 @@ export default function ConversationPage({ userId }: Props) {
                 min={200}
                 max={2000}
               />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-medium mb-2 text-sm">🔪 可用厨具</label>
-            <div className="flex flex-wrap gap-2">
-              {EQUIPMENT_OPTIONS.map((eq) => (
-                <button
-                  key={eq.value}
-                  type="button"
-                  onClick={() => toggleRecipeField('available_equipment', eq.value)}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    recipeForm.available_equipment.includes(eq.value)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {eq.label}
-                </button>
-              ))}
             </div>
           </div>
 
@@ -654,6 +643,21 @@ export default function ConversationPage({ userId }: Props) {
                         <p className="text-orange-600">
                           ❌ 缺少食材：{message.recipe.missing_ingredients.join('、')}
                         </p>
+                      )}
+                      {message.recipe.missing_equipment && message.recipe.missing_equipment.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-orange-600">
+                            🔪 缺少厨具：{message.recipe.missing_equipment.join('、')}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleKitchenwareRecommend(message.id, message.recipe!.missing_equipment)}
+                            disabled={kitchenwareRecStates[message.id]}
+                            className="px-3 py-1 rounded text-xs font-bold bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                          >
+                            {kitchenwareRecStates[message.id] ? '推荐中...' : '🔪 厨具推荐'}
+                          </button>
+                        </div>
                       )}
                       {/* 确认结果消息 */}
                       <div>

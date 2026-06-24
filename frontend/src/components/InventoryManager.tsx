@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { inventoryAPI } from '../services/api';
 import { DEFAULT_INVENTORY_ITEM } from '../data/defaultTestData';
 import { Inventory, ExpiringInventory } from '../types';
@@ -9,68 +9,143 @@ import { getFriendlyError } from '../services/error';
 
 interface Props {
   userId: string;
+  itemType: 'ingredient' | 'equipment';
 }
 
-export default function InventoryManager({ userId }: Props) {
+const LABELS: Record<'ingredient' | 'equipment', {
+  pageTitle: string;
+  addTitle: string;
+  namePlaceholder: string;
+  unitPlaceholder: string;
+  createBtn: string;
+  listTitle: string;
+  emptyText: string;
+  tableNameCol: string;
+  tableItemLabel: string;
+  deleteConfirm: string;
+  createError: string;
+  loadError: string;
+  adjustError: string;
+  deleteError: string;
+  createValidation: string;
+}> = {
+  ingredient: {
+    pageTitle: '食材管理',
+    addTitle: '➕ 添加新食材',
+    namePlaceholder: '食材名称',
+    unitPlaceholder: '单位（个、斤、盒等）',
+    createBtn: '添加食材',
+    listTitle: '📋 当前食材',
+    emptyText: '暂无食材，请添加',
+    tableNameCol: '食材',
+    tableItemLabel: '食材',
+    deleteConfirm: '确认删除食材',
+    createError: '创建食材失败',
+    loadError: '食材加载失败',
+    adjustError: '调整食材失败',
+    deleteError: '删除食材失败',
+    createValidation: '请完整填写食材名称、数量、单位和过期日期，且数量必须大于 0',
+  },
+  equipment: {
+    pageTitle: '厨具管理',
+    addTitle: '🔪 添加新厨具',
+    namePlaceholder: '厨具名称',
+    unitPlaceholder: '单位（个、台、套等）',
+    createBtn: '添加厨具',
+    listTitle: '🔪 当前厨具',
+    emptyText: '暂无厨具，请添加',
+    tableNameCol: '厨具',
+    tableItemLabel: '厨具',
+    deleteConfirm: '确认删除厨具',
+    createError: '创建厨具失败',
+    loadError: '厨具加载失败',
+    adjustError: '调整厨具失败',
+    deleteError: '删除厨具失败',
+    createValidation: '请完整填写厨具名称、数量和单位，且数量必须大于 0',
+  },
+};
+
+export default function InventoryManager({ userId, itemType }: Props) {
+  const labels = LABELS[itemType];
+  const isIngredient = itemType === 'ingredient';
+
   // 列表、临期提醒和表单状态拆开管理，避免一次操作误触发不相关的加载态。
   const [inventories, setInventories] = useState<Inventory[]>([]);
   const [expiring, setExpiring] = useState<ExpiringInventory[]>([]);
   const [isListLoading, setIsListLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [newItem, setNewItem] = useState(DEFAULT_INVENTORY_ITEM);
+
+  const defaultForm = useMemo(() => ({
+    ...DEFAULT_INVENTORY_ITEM,
+    item_type: itemType,
+    name: isIngredient ? DEFAULT_INVENTORY_ITEM.name : '电饭锅',
+    quantity: isIngredient ? DEFAULT_INVENTORY_ITEM.quantity : 1,
+    unit: isIngredient ? DEFAULT_INVENTORY_ITEM.unit : '个',
+    note: isIngredient ? DEFAULT_INVENTORY_ITEM.note : '',
+    expire_date: isIngredient
+      ? DEFAULT_INVENTORY_ITEM.expire_date
+      : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  }), [itemType, isIngredient]);
+
+  const [newItem, setNewItem] = useState(defaultForm);
   const [adjustingIds, setAdjustingIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
+  // 当 itemType 变化时重置表单
+  useEffect(() => {
+    setNewItem(defaultForm);
+  }, [defaultForm]);
 
   const isCreateFormValid =
     newItem.name.trim().length > 0 &&
     newItem.unit.trim().length > 0 &&
     Number.isFinite(newItem.quantity) &&
     newItem.quantity > 0 &&
-    newItem.expire_date.trim().length > 0;
+    (isIngredient ? newItem.expire_date.trim().length > 0 : true);
 
   const fetchData = async () => {
     setIsListLoading(true);
     setError('');
     try {
-      // 库存列表是首屏主内容，先显示它；临期提醒慢或失败时不阻塞列表渲染。
-      const listRes = await inventoryAPI.list(userId);
+      const listRes = await inventoryAPI.list(userId, itemType);
       setInventories(listRes.data);
     } catch (err: unknown) {
-      setError(getFriendlyError(err, '库存加载失败'));
+      setError(getFriendlyError(err, labels.loadError));
     } finally {
       setIsListLoading(false);
     }
 
-    try {
-      const expiringRes = await inventoryAPI.expiring(7, userId);
-      setExpiring(expiringRes.data);
-    } catch {
-      setExpiring([]);
+    // 厨具不过期，不需要加载临期提醒
+    if (isIngredient) {
+      try {
+        const expiringRes = await inventoryAPI.expiring(7, userId, itemType);
+        setExpiring(expiringRes.data);
+      } catch {
+        setExpiring([]);
+      }
     }
   };
 
   useEffect(() => {
-    // userId 变化时重新拉取数据，为后续多用户隔离预留入口。
     fetchData();
-  }, [userId]);
+  }, [userId, itemType]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isCreateFormValid) {
-      setError('请完整填写食材名称、数量、单位和过期日期，且数量必须大于 0');
+      setError(labels.createValidation);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await inventoryAPI.create({ ...newItem, user_id: userId });
-      // 创建成功后重置表单并刷新列表，确保临期提醒也同步更新。
-      setNewItem(DEFAULT_INVENTORY_ITEM);
+      await inventoryAPI.create({ ...newItem, user_id: userId, item_type: itemType });
+      setNewItem(defaultForm);
       setError('');
       await fetchData();
     } catch (err: unknown) {
-      setError(getFriendlyError(err, '创建食材失败'));
+      setError(getFriendlyError(err, labels.createError));
     } finally {
       setIsSubmitting(false);
     }
@@ -83,11 +158,10 @@ export default function InventoryManager({ userId }: Props) {
 
     setAdjustingIds((prev) => new Set(prev).add(id));
     try {
-      // 使用 Set 记录行级操作状态，避免调整某一行时锁住整张表。
       await inventoryAPI.adjust(id, delta);
       await fetchData();
     } catch (err: unknown) {
-      setError(getFriendlyError(err, '调整库存失败'));
+      setError(getFriendlyError(err, labels.adjustError));
     } finally {
       setAdjustingIds((prev) => {
         const next = new Set(prev);
@@ -102,7 +176,7 @@ export default function InventoryManager({ userId }: Props) {
       return;
     }
 
-    const confirmed = window.confirm(`确认删除食材: ${name} ?`);
+    const confirmed = window.confirm(`${labels.deleteConfirm}: ${name} ?`);
     if (!confirmed) {
       return;
     }
@@ -112,7 +186,7 @@ export default function InventoryManager({ userId }: Props) {
       await inventoryAPI.remove(id);
       await fetchData();
     } catch (err: unknown) {
-      setError(getFriendlyError(err, '删除库存失败'));
+      setError(getFriendlyError(err, labels.deleteError));
     } finally {
       setDeletingIds((prev) => {
         const next = new Set(prev);
@@ -124,15 +198,16 @@ export default function InventoryManager({ userId }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* 新增食材 */}
+      {/* 新增 */}
       <div className="card">
-        <h2 className="text-xl font-bold mb-4">➕ 添加新食材</h2>
+        <h2 className="text-xl font-bold mb-4">{labels.addTitle}</h2>
         {error && <ErrorState message={error} className="mb-4" />}
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleCreate} className="space-y-3">
+          {/* 第一行：名称 + 数量 + 单位 */}
+          <div className="grid grid-cols-3 gap-3">
             <input
               type="text"
-              placeholder="食材名称"
+              placeholder={labels.namePlaceholder}
               value={newItem.name}
               onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
               className="input"
@@ -151,33 +226,37 @@ export default function InventoryManager({ userId }: Props) {
             />
             <input
               type="text"
-              placeholder="单位（个、斤、盒等）"
+              placeholder={labels.unitPlaceholder}
               value={newItem.unit}
               onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
               className="input"
             />
+          </div>
+          {/* 第二行：日期（仅食材） */}
+          {isIngredient && (
             <input
               type="date"
               value={newItem.expire_date}
               onChange={(e) => setNewItem({ ...newItem, expire_date: e.target.value })}
-              className="input"
+              className="input w-full"
             />
-            <textarea
-              placeholder="备注（可选）"
-              value={newItem.note}
-              onChange={(e) => setNewItem({ ...newItem, note: e.target.value })}
-              className="input col-span-2"
-              rows={2}
-            />
-          </div>
+          )}
+          {/* 第三行：备注 */}
+          <textarea
+            placeholder="备注（可选）"
+            value={newItem.note}
+            onChange={(e) => setNewItem({ ...newItem, note: e.target.value })}
+            className="input w-full"
+            rows={2}
+          />
           <button type="submit" className="btn btn-primary w-full" disabled={isSubmitting || !isCreateFormValid}>
-            {isSubmitting ? '提交中...' : '添加食材'}
+            {isSubmitting ? '提交中...' : labels.createBtn}
           </button>
         </form>
       </div>
 
-      {/* 临期提醒 */}
-      {expiring.length > 0 && (
+      {/* 临期提醒 — 仅食材 */}
+      {isIngredient && expiring.length > 0 && (
         <div className="card bg-orange-50 border-2 border-orange-200">
           <h2 className="text-xl font-bold mb-4 text-orange-800">⚠️ 7天内即将过期</h2>
           <div className="space-y-2">
@@ -198,19 +277,19 @@ export default function InventoryManager({ userId }: Props) {
 
       {/* 库存列表 */}
       <div className="card">
-        <h2 className="text-xl font-bold mb-4">📋 当前库存</h2>
+        <h2 className="text-xl font-bold mb-4">{labels.listTitle}</h2>
         {isListLoading ? (
-          <LoadingState text="库存加载中..." />
+          <LoadingState text="加载中..." />
         ) : inventories.length === 0 ? (
-          <EmptyState text="暂无库存，请添加食材" />
+          <EmptyState text={labels.emptyText} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-2">食材</th>
+                  <th className="text-left py-2">{labels.tableNameCol}</th>
                   <th className="text-center py-2">数量</th>
-                  <th className="text-center py-2">过期日期</th>
+                  {isIngredient && <th className="text-center py-2">过期日期</th>}
                   <th className="text-center py-2">操作</th>
                 </tr>
               </thead>
@@ -222,7 +301,7 @@ export default function InventoryManager({ userId }: Props) {
                       {item.note && <p className="text-xs text-gray-500">{item.note}</p>}
                     </td>
                     <td className="text-center">{item.quantity} {item.unit}</td>
-                    <td className="text-center text-sm">{item.expire_date}</td>
+                    {isIngredient && <td className="text-center text-sm">{item.expire_date}</td>}
                     <td className="text-center space-x-2">
                       <button
                         onClick={() => handleAdjust(item.id, -1)}

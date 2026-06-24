@@ -8,21 +8,9 @@ vi.mock('../ConversationPage', () => ({
   ),
 }));
 
-vi.mock('../InventoryManager', () => ({
+vi.mock('../InventoryPage', () => ({
   default: ({ userId }: { userId: string }) => (
-    <div data-testid="inventory-manager">InventoryManager (userId: {userId})</div>
-  ),
-}));
-
-vi.mock('../HealthAnalyzer', () => ({
-  default: ({ userId }: { userId: string }) => (
-    <div data-testid="health-analyzer">HealthAnalyzer (userId: {userId})</div>
-  ),
-}));
-
-vi.mock('../EquipmentChecker', () => ({
-  default: ({ userId }: { userId: string }) => (
-    <div data-testid="equipment-checker">EquipmentChecker (userId: {userId})</div>
+    <div data-testid="inventory-page">InventoryPage (userId: {userId})</div>
   ),
 }));
 
@@ -41,13 +29,11 @@ vi.mock('../ProfileForm', () => ({
 // ─── 分组 A：导航标签 ────────────────────────────────────────
 
 describe('App — 导航标签', () => {
-  it('A1. 渲染所有 6 个标签（不含菜谱推荐）', () => {
+  it('A1. 渲染所有 4 个标签（不含菜谱推荐）', () => {
     render(<App />);
 
     expect(screen.getByRole('button', { name: '💬 对话' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '📦 库存管理' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '💪 健康分析' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '🔪 厨具检查' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '🧠 模型记忆' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '🩺 健康档案' })).toBeInTheDocument();
   });
@@ -71,13 +57,7 @@ describe('App — 标签切换', () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: '📦 库存管理' }));
-    expect(screen.getByTestId('inventory-manager')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '💪 健康分析' }));
-    expect(screen.getByTestId('health-analyzer')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '🔪 厨具检查' }));
-    expect(screen.getByTestId('equipment-checker')).toBeInTheDocument();
+    expect(screen.getByTestId('inventory-page')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '🧠 模型记忆' }));
     expect(screen.getByTestId('memory-search')).toBeInTheDocument();

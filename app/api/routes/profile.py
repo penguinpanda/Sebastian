@@ -24,10 +24,11 @@ router = APIRouter(prefix="/profile")
 
 
 class PreferencesSchema(BaseModel):
-    """用户偏好结构：饮食、生活方式、菜系、自由文本。"""
+    """用户偏好结构：饮食、生活方式、菜系、厨具、自由文本。"""
     dietary: list[str] = Field(default_factory=list, description="饮食偏好标签，如 [辣, 清淡, 低碳水]")
     lifestyle: list[str] = Field(default_factory=list, description="生活方式标签，如 [早起, 运动]")
     cuisine: list[str] = Field(default_factory=list, description="菜系偏好，如 [川菜, 日料]")
+    equipment: list[str] = Field(default_factory=list, description="常用厨具，如 [炒锅, 电饭煲, 空气炸锅]")
     free_text: str = Field(default="", max_length=2000, description="自由文本补充")
 
 
@@ -64,6 +65,7 @@ def _preferences_to_dict(prefs: PreferencesSchema | None) -> dict[str, Any] | No
         "dietary": prefs.dietary,
         "lifestyle": prefs.lifestyle,
         "cuisine": prefs.cuisine,
+        "equipment": prefs.equipment,
         "free_text": prefs.free_text,
     }
 

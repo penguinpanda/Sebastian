@@ -42,6 +42,9 @@ def _build_profile_context(user_id: str) -> str:
                 cuisine = prefs.get("cuisine", [])
                 if cuisine:
                     parts.append(f"偏好菜系：{', '.join(cuisine)}")
+                equipment = prefs.get("equipment", [])
+                if equipment:
+                    parts.append(f"常用厨具：{', '.join(equipment)}")
                 free_text = prefs.get("free_text", "")
                 if free_text:
                     parts.append(f"用户补充：{free_text}")

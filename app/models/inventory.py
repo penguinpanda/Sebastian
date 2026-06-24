@@ -16,6 +16,7 @@ class Inventory(TimestampMixin, Base):
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default", index=True)
+    item_type: Mapped[str] = mapped_column(String(20), nullable=False, default="ingredient", index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
     unit: Mapped[str] = mapped_column(String(20), nullable=False)

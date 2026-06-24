@@ -89,6 +89,22 @@ def _build_recipe_graph(
 
     def collect_context(state: GraphState) -> GraphState:
         request = _as_model(state["request"], RecipeRecommendRequest)
+
+        # 自动从库存中补充用户厨具到 available_equipment
+        enriched_equipment = list(request.available_equipment)
+        try:
+            equipment_items = recipe_service._inventory_service.list_items(
+                user_id=request.user_id, item_type="equipment"
+            )
+            for eq in equipment_items:
+                if eq.name not in enriched_equipment:
+                    enriched_equipment.append(eq.name)
+        except Exception:
+            pass  # 库存服务不可用时忽略
+
+        if enriched_equipment != request.available_equipment:
+            request = request.model_copy(update={"available_equipment": enriched_equipment})
+
         search_result = search_graph.invoke({"request": SearchAnswerRequest(user_id=request.user_id, query=_search_query_for_recipe(request))})
         return {
             **state,
